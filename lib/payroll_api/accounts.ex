@@ -101,4 +101,64 @@ defmodule PayrollApi.Accounts do
   def change_user(%User{} = user, attrs \\ %{}) do
     User.changeset(user, attrs)
   end
+
+  @doc """
+  Authenticates a user by email and password.
+
+  ## Examples
+
+      iex> authenticate_user("user@example.com", "password123")
+      {:ok, %User{}}
+
+      iex> authenticate_user("user@example.com", "wrongpassword")
+      {:error, :invalid_credentials}
+
+  """
+  def authenticate_user(email, password) when is_binary(email) and is_binary(password) do
+    case Repo.get_by(User, email: email) do
+      nil ->
+        # Perform a dummy hash check to prevent timing attacks
+        Bcrypt.no_user_verify()
+        {:error, :invalid_credentials}
+
+      user ->
+        if Bcrypt.verify_pass(password, user.password_hash) do
+          {:ok, user}
+        else
+          {:error, :invalid_credentials}
+        end
+    end
+  end
+
+  def authenticate_user(_, _), do: {:error, :invalid_credentials}
+
+  @doc """
+  Authenticates a user by CPF and password.
+
+  ## Examples
+
+      iex> authenticate_user("12345678901", "password123")
+      {:ok, %User{}}
+
+      iex> authenticate_user("12345678901", "wrongpassword")
+      {:error, :invalid_credentials}
+
+  """
+  def authenticate_by_cpf(cpf, password) when is_binary(cpf) and is_binary(password) do
+    case Repo.get_by(User, cpf: cpf) do
+      nil ->
+        # Perform a dummy hash check to prevent timing attacks
+        Bcrypt.no_user_verify()
+        {:error, :invalid_credentials}
+
+      user ->
+        if Bcrypt.verify_pass(password, user.password_hash) do
+          {:ok, user}
+        else
+          {:error, :invalid_credentials}
+        end
+    end
+  end
+
+  def authenticate_by_cpf(_, _), do: {:error, :invalid_credentials}
 end
