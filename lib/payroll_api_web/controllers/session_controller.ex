@@ -2,7 +2,7 @@ defmodule PayrollApiWeb.SessionController do
   use PayrollApiWeb, :controller
 
   alias PayrollApi.Accounts
-  alias PayrollApiWeb.Guardian
+  alias PayrollApi.Auth.Guardian
 
   @doc """
   Handler para autenticação de usuários via CPF e senha.
@@ -16,11 +16,18 @@ defmodule PayrollApiWeb.SessionController do
     case Accounts.authenticate_by_cpf(cpf, password) do
       {:ok, user} ->
         # Gera o token JWT com os dados do usuário
-        {:ok, token, _claims} = Guardian.encode_and_sign(user)
+        case Guardian.encode_and_sign(user) do
+          {:ok, token, _claims} ->
+            conn
+            |> put_status(:ok)
+            |> render(:show, user: user, token: token)
 
-        conn
-        |> put_status(:ok)
-        |> render(:show, user: user, token: token)
+          {:error, reason} ->
+            # Erro ao gerar token (ex: configuração ausente)
+            conn
+            |> put_status(:internal_server_error)
+            |> json(%{"error" => "Erro ao gerar token de autenticação", "details" => inspect(reason)})
+        end
 
       {:error, _reason} ->
         # Retorna erro genérico para não revelar se o CPF existe ou não

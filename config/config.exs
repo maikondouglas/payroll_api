@@ -40,7 +40,7 @@ config :logger, :default_formatter,
 config :phoenix, :json_library, Jason
 
 # Configure Guardian
-config :payroll_api, PayrollApiWeb.Guardian,
+config :payroll_api, PayrollApi.Auth.Guardian,
   issuer: "payroll_api",
   secret_key: nil
 

@@ -1,14 +1,29 @@
 defmodule PayrollApiWeb.Router do
   use PayrollApiWeb, :router
 
+  # Pipeline padrão para JSON
   pipeline :api do
     plug :accepts, ["json"]
   end
 
+  # Nosso novo pipeline de autenticação
+  pipeline :auth do
+    plug PayrollApi.Auth.Pipeline
+  end
+
+  # --- ROTAS PÚBLICAS ---
   scope "/api", PayrollApiWeb do
     pipe_through :api
 
     post "/login", SessionController, :create
+  end
+
+  # --- ROTAS PROTEGIDAS ---
+  scope "/api", PayrollApiWeb do
+    pipe_through [:api, :auth] # Aqui exigimos o token!
+
+    # Vamos criar essa rota de teste para ver se funciona:
+    get "/me", UserController, :me
   end
 
   # Enable LiveDashboard and Swoosh mailbox preview in development

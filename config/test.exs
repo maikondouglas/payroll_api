@@ -21,7 +21,7 @@ config :payroll_api, PayrollApiWeb.Endpoint,
   server: false
 
 # Configure Guardian
-config :payroll_api, PayrollApiWeb.Guardian,
+config :payroll_api, PayrollApi.Auth.Guardian,
   secret_key: "4tuV+oXitHJIfolzhhI/DqXSacSRmn1gvyoi1qXCFQMah+jLwFkcDUpqmFxUO/RG"
 
 # In test we don't send emails
