@@ -7,6 +7,8 @@ defmodule PayrollApiWeb.Router do
 
   scope "/api", PayrollApiWeb do
     pipe_through :api
+
+    post "/login", SessionController, :create
   end
 
   # Enable LiveDashboard and Swoosh mailbox preview in development

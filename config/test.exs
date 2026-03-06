@@ -20,6 +20,10 @@ config :payroll_api, PayrollApiWeb.Endpoint,
   secret_key_base: "4tuV+oXitHJIfolzhhI/DqXSacSRmn1gvyoi1qXCFQMah+jLwFkcDUpqmFxUO/RG",
   server: false
 
+# Configure Guardian
+config :payroll_api, PayrollApiWeb.Guardian,
+  secret_key: "4tuV+oXitHJIfolzhhI/DqXSacSRmn1gvyoi1qXCFQMah+jLwFkcDUpqmFxUO/RG"
+
 # In test we don't send emails
 config :payroll_api, PayrollApi.Mailer, adapter: Swoosh.Adapters.Test
 
