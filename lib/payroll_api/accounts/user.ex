@@ -2,6 +2,8 @@ defmodule PayrollApi.Accounts.User do
   use Ecto.Schema
   import Ecto.Changeset
 
+  alias PayrollApi.HR.Employee
+
   schema "users" do
     field :name, :string
     field :email, :string
@@ -9,6 +11,9 @@ defmodule PayrollApi.Accounts.User do
     field :role, :string, default: "employee"
     field :password, :string, virtual: true
     field :password_hash, :string
+
+    # Relacionamento com Employee (1:1)
+    has_one :employee, Employee, on_delete: :delete_all
 
     timestamps()
   end
