@@ -1,12 +1,48 @@
 defmodule PayrollApiWeb.Router do
   use PayrollApiWeb, :router
 
+  # Pipeline padrão para JSON
   pipeline :api do
     plug :accepts, ["json"]
+    plug OpenApiSpex.Plug.PutApiSpec, module: PayrollApiWeb.ApiSpec
   end
 
-  scope "/api", PayrollApiWeb do
+  # Nosso novo pipeline de autenticação
+  pipeline :auth do
+    plug PayrollApi.Auth.Pipeline
+  end
+
+  # --- ROTAS V1 ---
+  scope "/api/v1", PayrollApiWeb.V1, as: :v1 do
     pipe_through :api
+
+    # Rotas públicas
+    post "/login", SessionController, :create
+
+    # Rotas protegidas
+    scope "/" do
+      pipe_through :auth
+
+      get "/me", UserController, :me
+      post "/payroll/upload", PayrollController, :upload
+
+      # Contracheques do colaborador
+      get "/my-payslips", MyPayslipController, :index
+      get "/my-payslips/:id", MyPayslipController, :show
+    end
+  end
+
+  # --- OPENAPI/SWAGGER ---
+  scope "/api" do
+    pipe_through :api
+
+    get "/openapi", OpenApiSpex.Plug.RenderSpec, []
+  end
+
+  scope "/api" do
+    pipe_through :api
+
+    get "/swagger", OpenApiSpex.Plug.SwaggerUI, path: "/api/openapi"
   end
 
   # Enable LiveDashboard and Swoosh mailbox preview in development

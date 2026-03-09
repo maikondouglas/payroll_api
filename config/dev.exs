@@ -26,6 +26,10 @@ config :payroll_api, PayrollApiWeb.Endpoint,
   secret_key_base: "7BCAwXX8chSYgdJnMXIUUFTwP0a3OeQwaQf8Ap6O3j3ayhwfJ09gxHzWrWJb36+I",
   watchers: []
 
+# Configure Guardian
+config :payroll_api, PayrollApi.Auth.Guardian,
+  secret_key: "7BCAwXX8chSYgdJnMXIUUFTwP0a3OeQwaQf8Ap6O3j3ayhwfJ09gxHzWrWJb36+I"
+
 # ## SSL Support
 #
 # In order to use HTTPS in development, a self-signed

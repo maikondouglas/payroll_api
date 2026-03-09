@@ -51,7 +51,11 @@ defmodule PayrollApi.MixProject do
       {:gettext, "~> 1.0"},
       {:jason, "~> 1.2"},
       {:dns_cluster, "~> 0.2.0"},
-      {:bandit, "~> 1.5"}
+      {:bandit, "~> 1.5"},
+      {:bcrypt_elixir, "~> 3.0"},
+      {:guardian, "~> 2.3"},
+      {:nimble_csv, "~> 1.2"},
+      {:open_api_spex, "~> 3.16"}
     ]
   end
 

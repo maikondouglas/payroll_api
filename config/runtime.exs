@@ -68,6 +68,10 @@ if config_env() == :prod do
     ],
     secret_key_base: secret_key_base
 
+  # Configure Guardian
+  config :payroll_api, PayrollApi.Auth.Guardian,
+    secret_key: secret_key_base
+
   # ## SSL Support
   #
   # To get SSL working, you will need to add the `https` key
