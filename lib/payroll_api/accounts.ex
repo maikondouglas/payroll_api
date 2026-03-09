@@ -38,6 +38,22 @@ defmodule PayrollApi.Accounts do
   def get_user!(id), do: Repo.get!(User, id)
 
   @doc """
+  Gets a single user by CPF.
+
+  Returns nil if the User does not exist.
+
+  ## Examples
+
+      iex> get_user_by_cpf("12345678901")
+      %User{}
+
+      iex> get_user_by_cpf("00000000000")
+      nil
+
+  """
+  def get_user_by_cpf(cpf), do: Repo.get_by(User, cpf: cpf)
+
+  @doc """
   Creates a user.
 
   ## Examples
