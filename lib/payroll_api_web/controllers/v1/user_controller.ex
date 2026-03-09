@@ -1,10 +1,23 @@
 defmodule PayrollApiWeb.V1.UserController do
   use PayrollApiWeb, :controller
+  use OpenApiSpex.ControllerSpecs
 
   alias PayrollApi.Accounts
   alias PayrollApi.Accounts.User
+  alias PayrollApiWeb.Schemas.{MeResponse, ErrorResponse}
 
   action_fallback PayrollApiWeb.FallbackController
+
+  tags ["Usuários"]
+
+  operation :me,
+    summary: "Obter dados do usuário autenticado",
+    description: "Retorna as informações do usuário autenticado através do token JWT",
+    security: [%{"bearer" => []}],
+    responses: [
+      ok: {"Dados do usuário", "application/json", MeResponse},
+      unauthorized: {"Token ausente ou inválido", "application/json", ErrorResponse}
+    ]
 
   @doc """
   Endpoint protegido que retorna os dados do usuário autenticado.

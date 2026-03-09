@@ -44,6 +44,13 @@ config :payroll_api, PayrollApi.Auth.Guardian,
   issuer: "payroll_api",
   secret_key: nil
 
+# Configure OpenApiSpex
+config :payroll_api, :openapi_spec,
+  info: %{
+    title: "Payroll API",
+    version: "1.0.0"
+  }
+
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
 import_config "#{config_env()}.exs"

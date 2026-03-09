@@ -54,7 +54,8 @@ defmodule PayrollApi.MixProject do
       {:bandit, "~> 1.5"},
       {:bcrypt_elixir, "~> 3.0"},
       {:guardian, "~> 2.3"},
-      {:nimble_csv, "~> 1.2"}
+      {:nimble_csv, "~> 1.2"},
+      {:open_api_spex, "~> 3.16"}
     ]
   end
 
