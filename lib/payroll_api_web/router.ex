@@ -11,26 +11,24 @@ defmodule PayrollApiWeb.Router do
     plug PayrollApi.Auth.Pipeline
   end
 
-  # --- ROTAS PÚBLICAS ---
-  scope "/api", PayrollApiWeb do
+  # --- ROTAS V1 ---
+  scope "/api/v1", PayrollApiWeb.V1, as: :v1 do
     pipe_through :api
 
+    # Rotas públicas
     post "/login", SessionController, :create
-  end
 
-  # --- ROTAS PROTEGIDAS ---
-  scope "/api", PayrollApiWeb do
-    pipe_through [:api, :auth] # Aqui exigimos o token!
+    # Rotas protegidas
+    scope "/" do
+      pipe_through :auth
 
-    # Vamos criar essa rota de teste para ver se funciona:
-    get "/me", UserController, :me
+      get "/me", UserController, :me
+      post "/payroll/upload", PayrollController, :upload
 
-    # Upload de folha de pagamento
-    post "/payroll/upload", PayrollController, :upload
-
-    # Contracheques do colaborador autenticado
-    get "/my-payslips", MyPayslipController, :index
-    get "/my-payslips/:id", MyPayslipController, :show
+      # Contracheques do colaborador
+      get "/my-payslips", MyPayslipController, :index
+      get "/my-payslips/:id", MyPayslipController, :show
+    end
   end
 
   # Enable LiveDashboard and Swoosh mailbox preview in development

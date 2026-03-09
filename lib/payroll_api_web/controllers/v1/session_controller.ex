@@ -1,4 +1,4 @@
-defmodule PayrollApiWeb.SessionController do
+defmodule PayrollApiWeb.V1.SessionController do
   use PayrollApiWeb, :controller
 
   alias PayrollApi.Accounts

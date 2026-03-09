@@ -1,4 +1,4 @@
-defmodule PayrollApiWeb.SessionJSON do
+defmodule PayrollApiWeb.V1.SessionJSON do
   @moduledoc """
   Renderiza a resposta de autenticação com token JWT e dados do usuário.
   """

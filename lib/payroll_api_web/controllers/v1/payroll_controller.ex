@@ -1,4 +1,4 @@
-defmodule PayrollApiWeb.PayrollController do
+defmodule PayrollApiWeb.V1.PayrollController do
   use PayrollApiWeb, :controller
 
   alias PayrollApi.Payroll.Importer

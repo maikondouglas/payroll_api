@@ -1,4 +1,4 @@
-defmodule PayrollApiWeb.UserController do
+defmodule PayrollApiWeb.V1.UserController do
   use PayrollApiWeb, :controller
 
   alias PayrollApi.Accounts

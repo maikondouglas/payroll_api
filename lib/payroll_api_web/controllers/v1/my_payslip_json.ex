@@ -1,4 +1,4 @@
-defmodule PayrollApiWeb.MyPayslipJSON do
+defmodule PayrollApiWeb.V1.MyPayslipJSON do
   alias PayrollApi.Payroll.Payslip
 
   @doc """

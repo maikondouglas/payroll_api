@@ -1,4 +1,4 @@
-defmodule PayrollApiWeb.UserJSON do
+defmodule PayrollApiWeb.V1.UserJSON do
   alias PayrollApi.Accounts.User
 
   @doc """

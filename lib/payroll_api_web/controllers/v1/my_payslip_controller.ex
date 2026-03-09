@@ -1,4 +1,4 @@
-defmodule PayrollApiWeb.MyPayslipController do
+defmodule PayrollApiWeb.V1.MyPayslipController do
   use PayrollApiWeb, :controller
 
   alias PayrollApi.Payroll
