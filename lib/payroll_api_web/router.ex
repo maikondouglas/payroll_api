@@ -24,6 +24,9 @@ defmodule PayrollApiWeb.Router do
 
     # Vamos criar essa rota de teste para ver se funciona:
     get "/me", UserController, :me
+
+    # Upload de folha de pagamento
+    post "/payroll/upload", PayrollController, :upload
   end
 
   # Enable LiveDashboard and Swoosh mailbox preview in development
