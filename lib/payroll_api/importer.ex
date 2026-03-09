@@ -16,7 +16,7 @@ defmodule PayrollApi.Payroll.Importer do
     * `competence_date` - Data de competência (mês/ano) no formato ~D[2024-01-01]
 
   ## Estrutura do CSV
-  Matrícula,Nome,Salário Contratual,Função,Salário Líquido,Salário Base,GRATIFICAÇÃO COMPLEMENTAR,...
+  Matrícula,CPF,Nome,Salário Contratual,Função,Salário Líquido,Salário Base,GRATIFICAÇÃO COMPLEMENTAR,...
 
   ## Retorno
     * `{:ok, results}` - Lista com resultados da importação
@@ -30,6 +30,7 @@ defmodule PayrollApi.Payroll.Importer do
     # Headers do CSV para identificar as colunas de rubricas
     headers = [
       "Matrícula",
+      "CPF",
       "Nome",
       "Salário Contratual",
       "Função",
@@ -81,13 +82,14 @@ defmodule PayrollApi.Payroll.Importer do
   # Processa uma linha individual do CSV
   defp process_row(row, headers, competence_date) do
     with {:ok, registration} <- extract_registration(row),
-         {:ok, base_salary} <- parse_decimal(Enum.at(row, 5)),
-         {:ok, net_salary} <- parse_decimal(Enum.at(row, 4)),
+         {:ok, cpf} <- extract_cpf(row),
+         {:ok, base_salary} <- parse_decimal(Enum.at(row, 6)),
+         {:ok, net_salary} <- parse_decimal(Enum.at(row, 5)),
          {:ok, details} <- build_details_map(row, headers),
          {:ok, employee} <- find_employee(registration),
          {:ok, payslip} <- create_payslip(employee, competence_date, base_salary, net_salary, details) do
-      Logger.debug("Payslip criado para matrícula #{registration}")
-      {:ok, %{registration: registration, payslip_id: payslip.id}}
+      Logger.debug("Payslip criado para matrícula #{registration} (CPF: #{cpf})")
+      {:ok, %{registration: registration, cpf: cpf, payslip_id: payslip.id}}
     else
       {:error, :employee_not_found, registration} ->
         Logger.warning("Funcionário não encontrado: #{registration}")
@@ -95,20 +97,24 @@ defmodule PayrollApi.Payroll.Importer do
 
       {:error, :invalid_decimal, field} ->
         Logger.warning("Valor decimal inválido no campo: #{field}")
-        {:error, %{registration: Enum.at(row, 0), reason: "Valor decimal inválido em #{field}"}}
+        {:error, %{registration: Enum.at(row, 0), cpf: Enum.at(row, 1), reason: "Valor decimal inválido em #{field}"}}
 
       {:error, :empty_registration} ->
         Logger.warning("Matrícula vazia na linha")
-        {:error, %{registration: nil, reason: "Matrícula vazia"}}
+        {:error, %{registration: nil, cpf: Enum.at(row, 1), reason: "Matrícula vazia"}}
+
+      {:error, :empty_cpf} ->
+        Logger.warning("CPF vazio na linha")
+        {:error, %{registration: Enum.at(row, 0), cpf: nil, reason: "CPF vazio"}}
 
       {:error, %Ecto.Changeset{} = changeset} ->
         errors = format_changeset_errors(changeset)
         Logger.warning("Erro de validação: #{inspect(errors)}")
-        {:error, %{registration: Enum.at(row, 0), reason: "Erro de validação", details: errors}}
+        {:error, %{registration: Enum.at(row, 0), cpf: Enum.at(row, 1), reason: "Erro de validação", details: errors}}
 
       {:error, reason} ->
         Logger.error("Erro desconhecido: #{inspect(reason)}")
-        {:error, %{registration: Enum.at(row, 0), reason: inspect(reason)}}
+        {:error, %{registration: Enum.at(row, 0), cpf: Enum.at(row, 1), reason: inspect(reason)}}
     end
   end
 
@@ -118,6 +124,15 @@ defmodule PayrollApi.Payroll.Importer do
       nil -> {:error, :empty_registration}
       "" -> {:error, :empty_registration}
       registration -> {:ok, String.trim(registration)}
+    end
+  end
+
+  # Extrai e valida o CPF
+  defp extract_cpf(row) do
+    case Enum.at(row, 1) do
+      nil -> {:error, :empty_cpf}
+      "" -> {:error, :empty_cpf}
+      cpf -> {:ok, String.trim(cpf)}
     end
   end
 
@@ -150,11 +165,11 @@ defmodule PayrollApi.Payroll.Importer do
 
   # Constrói o mapa de detalhes com todas as rubricas
   defp build_details_map(row, headers) do
-    # Índices das rubricas extras (a partir da coluna 6)
+    # Índices das rubricas extras (a partir da coluna 7 - após Matrícula, CPF, Nome, Salário Contratual, Função, Salário Líquido, Salário Base)
     details =
       headers
-      |> Enum.drop(6)
-      |> Enum.with_index(6)
+      |> Enum.drop(7)
+      |> Enum.with_index(7)
       |> Enum.reduce(%{}, fn {header, index}, acc ->
         value = Enum.at(row, index, "")
 
