@@ -1,0 +1,60 @@
+services:
+  # Serviço do PostgreSQL
+  db:
+    image: postgres:15
+    container_name: payroll_api_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: payroll_api_dev
+    ports:
+      - "5433:5432"
+    volumes:
+      # Persiste os dados do banco de dados entre reinicializações
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Serviço da aplicação Phoenix
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: payroll_api_web
+    ports:
+      - "4000:4000"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # Variáveis de ambiente para configuração do banco
+      DATABASE_HOST: db
+      DATABASE_USER: postgres
+      DATABASE_PASSWORD: postgres
+      DATABASE_NAME: payroll_api_dev
+      # Permite conexões externas ao Phoenix (necessário para Docker)
+      PHX_HOST: 0.0.0.0
+      # Chromium path para chromic_pdf (detecta automaticamente no Debian)
+      CHROME_BIN: /usr/bin/chromium
+    volumes:
+      # Monta o código local no container para live-reload
+      - .:/app
+      # Ignora _build e deps locais para evitar conflitos
+      - /app/_build
+      - /app/deps
+    command: >
+      sh -c "
+        mix deps.get &&
+        mix ecto.create &&
+        mix ecto.migrate &&
+        mix phx.server
+      "
+    stdin_open: true
+    tty: true
+
+# Volumes nomeados para persistência de dados
+volumes:
+  postgres_data:

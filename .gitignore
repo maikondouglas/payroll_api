@@ -25,3 +25,8 @@ erl_crash.dump
 # Ignore package tarball (built via "mix hex.build").
 payroll_api-*.tar
 
+# CSV files with data
+Rubricas_Janeiro_2026.csv
+
+# Docker
+docker-compose.override.yml

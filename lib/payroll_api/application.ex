@@ -12,7 +12,7 @@ defmodule PayrollApi.Application do
       PayrollApi.Repo,
       {DNSCluster, query: Application.get_env(:payroll_api, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: PayrollApi.PubSub},
-      ChromicPDF,
+      {ChromicPDF, chromic_pdf_opts()},
       # Start a worker by calling: PayrollApi.Worker.start_link(arg)
       # {PayrollApi.Worker, arg},
       # Start to serve requests, typically the last entry
@@ -31,5 +31,13 @@ defmodule PayrollApi.Application do
   def config_change(changed, _new, removed) do
     PayrollApiWeb.Endpoint.config_change(changed, removed)
     :ok
+  end
+
+  # ChromicPDF configuration for Docker environment
+  defp chromic_pdf_opts do
+    [
+      chrome_args: "--no-sandbox --disable-dev-shm-usage --disable-gpu",
+      discard_stderr: false
+    ]
   end
 end

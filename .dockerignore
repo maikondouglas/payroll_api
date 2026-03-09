@@ -1,0 +1,39 @@
+# Git
+.git
+.gitignore
+
+# Mix artifacts
+/_build
+/deps
+*.ez
+
+# Coverage
+/cover
+
+# Backup files
+*~
+*.swp
+*.swo
+
+# Environment files
+.env
+.env.local
+
+# Documentation
+/doc
+
+# Temporary files
+/tmp
+erl_crash.dump
+
+# IDE
+.vscode
+.idea
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# CSV data files (não precisam ir pro container durante build)
+*.csv
