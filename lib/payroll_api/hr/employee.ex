@@ -1,7 +1,7 @@
 defmodule PayrollApi.HR.Employee do
   @moduledoc """
   Schema de Funcionário (Employee).
-  
+
   Representa um colaborador da empresa com informações de matrícula e cargo.
   Cada funcionário está associado a exatamente um usuário (1:1).
   """

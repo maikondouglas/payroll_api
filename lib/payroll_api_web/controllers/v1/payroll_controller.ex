@@ -7,19 +7,22 @@ defmodule PayrollApiWeb.V1.PayrollController do
 
   require Logger
 
-  tags ["Folha de Pagamento"]
+  tags(["Folha de Pagamento"])
 
-  operation :upload,
+  operation(:upload,
     summary: "Importar folha de pagamento via CSV",
-    description: "Faz upload de um arquivo CSV com dados de folha de pagamento e importa os registros",
+    description:
+      "Faz upload de um arquivo CSV com dados de folha de pagamento e importa os registros",
     security: [%{"bearer" => []}],
-    request_body: {"Arquivo CSV", "multipart/form-data", PayrollApiWeb.Schemas.PayrollUploadRequest},
+    request_body:
+      {"Arquivo CSV", "multipart/form-data", PayrollApiWeb.Schemas.PayrollUploadRequest},
     responses: [
       ok: {"Importação realizada", "application/json", PayrollUploadResponse},
       bad_request: {"Parâmetros ausentes ou inválidos", "application/json", ErrorResponse},
       internal_server_error: {"Erro ao processar arquivo", "application/json", ErrorResponse},
       unauthorized: {"Token ausente ou inválido", "application/json", ErrorResponse}
     ]
+  )
 
   @doc """
   Endpoint para upload e importação de arquivo CSV de folha de pagamento.

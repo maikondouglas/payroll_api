@@ -1,7 +1,7 @@
 defmodule PayrollApi.Payroll.Payslip do
   @moduledoc """
   Schema de Contracheque (Payslip).
-  
+
   Representa a folha de pagamento de um funcionário em um período específico.
   Armazena salário base, salário líquido e detalhes de rubricas extras em JSON.
   """
@@ -32,8 +32,9 @@ defmodule PayrollApi.Payroll.Payslip do
     |> validate_number(:base_salary, greater_than: 0, message: "deve ser maior que 0")
     |> validate_number(:net_salary, greater_than_or_equal_to: 0, message: "não pode ser negativo")
     |> validate_net_salary_less_than_base()
-    |> unique_constraint([:employee_id, :competence], 
-        message: "já existe contracheque para este funcionário neste período")
+    |> unique_constraint([:employee_id, :competence],
+      message: "já existe contracheque para este funcionário neste período"
+    )
     |> foreign_key_constraint(:employee_id, message: "funcionário não existe")
   end
 

@@ -14,8 +14,10 @@ alias PayrollApi.Accounts
 
 Accounts.create_user(%{
   name: "Admin Master",
-  email: "admin@payroll.com", # Guardamos o e-mail para comunicação
-  cpf: "00011122233",         # Usaremos o CPF para o login na API
+  # Guardamos o e-mail para comunicação
+  email: "admin@payroll.com",
+  # Usaremos o CPF para o login na API
+  cpf: "00011122233",
   password: "password123",
   role: "admin"
 })

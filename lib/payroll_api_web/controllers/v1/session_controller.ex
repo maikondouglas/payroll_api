@@ -6,17 +6,19 @@ defmodule PayrollApiWeb.V1.SessionController do
   alias PayrollApi.Auth.Guardian
   alias PayrollApiWeb.Schemas.{LoginRequest, LoginResponse, ErrorResponse}
 
-  tags ["Autenticação"]
+  tags(["Autenticação"])
 
-  operation :create,
+  operation(:create,
     summary: "Autenticar usuário via CPF e senha",
-    description: "Autentica um usuário fornecendo CPF e senha, retornando um token JWT para usar em requisições autenticadas",
+    description:
+      "Autentica um usuário fornecendo CPF e senha, retornando um token JWT para usar em requisições autenticadas",
     request_body: {"Credenciais de Login", "application/json", LoginRequest},
     responses: [
       ok: {"Autenticação bem-sucedida", "application/json", LoginResponse},
       unauthorized: {"Credenciais inválidas", "application/json", ErrorResponse},
       bad_request: {"Parâmetros ausentes ou inválidos", "application/json", ErrorResponse}
     ]
+  )
 
   @doc """
   Handler para autenticação de usuários via CPF e senha.
@@ -40,7 +42,10 @@ defmodule PayrollApiWeb.V1.SessionController do
             # Erro ao gerar token (ex: configuração ausente)
             conn
             |> put_status(:internal_server_error)
-            |> json(%{"error" => "Erro ao gerar token de autenticação", "details" => inspect(reason)})
+            |> json(%{
+              "error" => "Erro ao gerar token de autenticação",
+              "details" => inspect(reason)
+            })
         end
 
       {:error, _reason} ->

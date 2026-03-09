@@ -1,7 +1,7 @@
 defmodule PayrollApi.Payroll.Importer do
   @moduledoc """
   Módulo para importação de dados de folha de pagamento via CSV.
-  
+
   Cria automaticamente usuários e funcionários caso não existam,
   utilizando Ecto.Multi para garantir atomicidade das operações.
   """

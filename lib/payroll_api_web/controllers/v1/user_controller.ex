@@ -8,9 +8,9 @@ defmodule PayrollApiWeb.V1.UserController do
 
   action_fallback PayrollApiWeb.FallbackController
 
-  tags ["Usuários"]
+  tags(["Usuários"])
 
-  operation :me,
+  operation(:me,
     summary: "Obter dados do usuário autenticado",
     description: "Retorna as informações do usuário autenticado através do token JWT",
     security: [%{"bearer" => []}],
@@ -18,6 +18,7 @@ defmodule PayrollApiWeb.V1.UserController do
       ok: {"Dados do usuário", "application/json", MeResponse},
       unauthorized: {"Token ausente ou inválido", "application/json", ErrorResponse}
     ]
+  )
 
   @doc """
   Endpoint protegido que retorna os dados do usuário autenticado.

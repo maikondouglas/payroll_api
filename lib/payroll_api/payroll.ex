@@ -47,7 +47,9 @@ defmodule PayrollApi.Payroll do
 
   """
   def list_payslips_by_employee(employee_id) do
-    Repo.all(from p in Payslip, where: p.employee_id == ^employee_id, order_by: [desc: p.competence])
+    Repo.all(
+      from p in Payslip, where: p.employee_id == ^employee_id, order_by: [desc: p.competence]
+    )
   end
 
   @doc """

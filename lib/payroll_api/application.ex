@@ -12,6 +12,7 @@ defmodule PayrollApi.Application do
       PayrollApi.Repo,
       {DNSCluster, query: Application.get_env(:payroll_api, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: PayrollApi.PubSub},
+      ChromicPDF,
       # Start a worker by calling: PayrollApi.Worker.start_link(arg)
       # {PayrollApi.Worker, arg},
       # Start to serve requests, typically the last entry

@@ -42,7 +42,8 @@ defmodule PayrollApi.HR do
 
   Returns nil if the Employee does not exist.
   """
-  def get_employee_by_registration(registration), do: Repo.get_by(Employee, registration: registration)
+  def get_employee_by_registration(registration),
+    do: Repo.get_by(Employee, registration: registration)
 
   @doc """
   Creates a employee.

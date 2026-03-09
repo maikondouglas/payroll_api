@@ -29,6 +29,7 @@ defmodule PayrollApiWeb.Router do
       # Contracheques do colaborador
       get "/my-payslips", MyPayslipController, :index
       get "/my-payslips/:id", MyPayslipController, :show
+      get "/my-payslips/:id/download", MyPayslipController, :download
     end
   end
 
