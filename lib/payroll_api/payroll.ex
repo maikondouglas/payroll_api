@@ -51,6 +51,56 @@ defmodule PayrollApi.Payroll do
   end
 
   @doc """
+  Returns the list of payslips for a user.
+
+  This function joins the payslips table with the employees table
+  and returns all payslips where the employee's user_id matches
+  the given user_id, ordered by competence descending.
+
+  ## Examples
+
+      iex> list_my_payslips(123)
+      [%Payslip{}, ...]
+
+  """
+  def list_my_payslips(user_id) do
+    from(p in Payslip,
+      join: e in assoc(p, :employee),
+      where: e.user_id == ^user_id,
+      order_by: [desc: p.competence],
+      preload: [employee: e]
+    )
+    |> Repo.all()
+  end
+
+  @doc """
+  Gets a single payslip by ID, ensuring it belongs to the given user.
+
+  This function joins with the employees table to verify the payslip
+  belongs to the specified user_id.
+
+  Raises `Ecto.NoResultsError` if the Payslip does not exist or
+  doesn't belong to the user.
+
+  ## Examples
+
+      iex> get_my_payslip!(123, 456)
+      %Payslip{}
+
+      iex> get_my_payslip!(999, 456)
+      ** (Ecto.NoResultsError)
+
+  """
+  def get_my_payslip!(payslip_id, user_id) do
+    from(p in Payslip,
+      join: e in assoc(p, :employee),
+      where: p.id == ^payslip_id and e.user_id == ^user_id,
+      preload: [employee: e]
+    )
+    |> Repo.one!()
+  end
+
+  @doc """
   Gets a payslip by employee_id and competence.
 
   Returns nil if the Payslip does not exist.

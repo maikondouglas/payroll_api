@@ -27,6 +27,10 @@ defmodule PayrollApiWeb.Router do
 
     # Upload de folha de pagamento
     post "/payroll/upload", PayrollController, :upload
+
+    # Contracheques do colaborador autenticado
+    get "/my-payslips", MyPayslipController, :index
+    get "/my-payslips/:id", MyPayslipController, :show
   end
 
   # Enable LiveDashboard and Swoosh mailbox preview in development
