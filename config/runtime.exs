@@ -24,6 +24,11 @@ config :payroll_api, PayrollApiWeb.Endpoint,
   http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 
 if config_env() == :prod do
+  cors_origins =
+    System.get_env("CORS_ORIGINS", "")
+    |> String.split(",", trim: true)
+    |> Enum.map(&String.trim/1)
+
   database_url =
     System.get_env("DATABASE_URL") ||
       raise """
@@ -70,6 +75,13 @@ if config_env() == :prod do
 
   # Configure Guardian
   config :payroll_api, PayrollApi.Auth.Guardian, secret_key: secret_key_base
+
+  config :cors_plug,
+    origin: cors_origins,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    headers: ["Authorization", "Content-Type", "Accept", "Origin"],
+    expose: ["Authorization"],
+    max_age: 86_400
 
   # ## SSL Support
   #

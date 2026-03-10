@@ -35,6 +35,13 @@ config :payroll_api, PayrollApiWeb.Endpoint,
 config :payroll_api, PayrollApi.Auth.Guardian,
   secret_key: "7BCAwXX8chSYgdJnMXIUUFTwP0a3OeQwaQf8Ap6O3j3ayhwfJ09gxHzWrWJb36+I"
 
+config :cors_plug,
+  origin: ["http://localhost:3000", "http://localhost:5173"],
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  headers: ["Authorization", "Content-Type", "Accept", "Origin"],
+  expose: ["Authorization"],
+  max_age: 86_400
+
 # ## SSL Support
 #
 # In order to use HTTPS in development, a self-signed
