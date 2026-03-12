@@ -199,6 +199,29 @@ defmodule PayrollApi.Payroll do
     |> Repo.insert()
   end
 
+ @doc """
+  Insere ou atualiza uma lista de rubricas em lote.
+  """
+  def create_rubrics_in_bulk(rubrics_params) do
+    # CORREÇÃO: Usando DateTime em vez de NaiveDateTime
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    entries =
+      Enum.map(rubrics_params, fn param ->
+        param
+        |> Map.new(fn {k, v} -> {if(is_binary(k), do: String.to_atom(k), else: k), v} end)
+        |> Map.put(:inserted_at, now)
+        |> Map.put(:updated_at, now)
+      end)
+
+    Repo.insert_all(
+      Rubric,
+      entries,
+      on_conflict: :replace_all,
+      conflict_target: :code
+    )
+  end
+
   @doc """
   Updates a rubric.
   """
