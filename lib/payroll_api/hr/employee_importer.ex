@@ -101,7 +101,7 @@ defmodule PayrollApi.HR.EmployeeImporter do
   end
 
   defp find_column(headers, tokens) do
-    Enum.find_index(headers, fn header -> Enum.all?(tokens, &String.contains?(header, &1)) end)
+    Enum.find_index(headers, fn header -> Enum.any?(tokens, &String.contains?(header, &1)) end)
   end
 
   defp import_rows(repo, _headers, rows, col_map, header_line) do
@@ -140,7 +140,17 @@ defmodule PayrollApi.HR.EmployeeImporter do
              admission_date: parse_date(extract_optional(row, col_map.admissao)),
              birth_date: parse_date(extract_optional(row, col_map.nascimento))
            }) do
-      {:ok, %{line: line_number, employee_id: employee.id, registration: employee.registration, cpf: cpf, name: name}}
+      {:ok,
+       %{
+         line: line_number,
+         employee_id: employee.id,
+         registration: employee.registration,
+         cpf: cpf,
+         name: name,
+         job_title: employee.job_title,
+         admission_date: employee.admission_date,
+         birth_date: employee.birth_date
+       }}
     else
       {:error, %Ecto.Changeset{} = changeset} ->
         {:error, %{message: "Falha ao salvar funcionario na linha #{line_number}", details: format_changeset_errors(changeset)}}

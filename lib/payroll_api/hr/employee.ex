@@ -15,6 +15,8 @@ defmodule PayrollApi.HR.Employee do
   schema "employees" do
     field :registration, :string
     field :job_title, :string
+    field :admission_date, :date
+    field :birth_date, :date
 
     belongs_to :user, User
     has_many :payslips, Payslip, foreign_key: :employee_id, on_delete: :delete_all
@@ -27,12 +29,35 @@ defmodule PayrollApi.HR.Employee do
   """
   def changeset(employee, attrs) do
     employee
-    |> cast(attrs, [:registration, :job_title, :user_id])
-    |> validate_required([:registration, :job_title, :user_id])
+    |> cast(attrs, [:registration, :job_title, :admission_date, :birth_date, :user_id])
+    |> cast_assoc(:user, with: &user_sync_changeset/2)
+    |> validate_required([:registration, :job_title, :admission_date, :birth_date])
+    |> validate_user_reference()
     |> validate_length(:registration, min: 1, max: 20)
     |> validate_length(:job_title, min: 1, max: 100)
     |> unique_constraint(:registration, message: "matrícula já está em uso")
     |> unique_constraint(:user_id, message: "usuário já foi vinculado a outro funcionário")
     |> foreign_key_constraint(:user_id, message: "usuário não existe")
+  end
+
+  defp validate_user_reference(changeset) do
+    user_id = get_field(changeset, :user_id)
+    user_change = get_change(changeset, :user)
+
+    if user_id || user_change do
+      changeset
+    else
+      add_error(changeset, :user_id, "deve estar presente")
+    end
+  end
+
+  # Optional nested user sync for HR workflows.
+  # This allows updating name/CPF through Employee without requiring password.
+  defp user_sync_changeset(user, attrs) do
+    user
+    |> cast(attrs, [:name, :cpf])
+    |> validate_required([:name, :cpf])
+    |> validate_length(:cpf, is: 11, message: "deve conter exatamente 11 dígitos")
+    |> unique_constraint(:cpf)
   end
 end

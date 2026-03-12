@@ -17,7 +17,7 @@ defmodule PayrollApiWeb.Schemas.ImportDetail do
         example: "success"
       },
       data: %Schema{
-        type: :object,
+        allOf: [PayrollApiWeb.Schemas.EmployeeImportData],
         description: "Result payload for the processed row"
       }
     }
