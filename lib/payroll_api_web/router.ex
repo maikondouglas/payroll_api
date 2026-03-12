@@ -28,6 +28,8 @@ defmodule PayrollApiWeb.Router do
       pipe_through :auth
 
       get "/me", UserController, :me
+      post "/hr/employees/import", EmployeeImportController, :import
+      post "/payroll/import", PayrollController, :import
       post "/payroll/upload", PayrollController, :upload
 
       # Contracheques do colaborador

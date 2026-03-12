@@ -9,7 +9,7 @@ defmodule PayrollApiWeb.V1.PayrollController do
 
   tags(["Folha de Pagamento"])
 
-  operation(:upload,
+  operation(:import,
     summary: "Importar folha de pagamento via CSV",
     description:
       "Faz upload de um arquivo CSV com dados de folha de pagamento e importa os registros",
@@ -35,7 +35,7 @@ defmodule PayrollApiWeb.V1.PayrollController do
   Retorna 400 Bad Request se parâmetros estiverem ausentes ou inválidos.
   Retorna 500 Internal Server Error se houver erro na importação.
   """
-  def upload(conn, %{"file" => %Plug.Upload{path: file_path}, "competence" => competence_str}) do
+  def import(conn, %{"file" => %Plug.Upload{path: file_path}, "competence" => competence_str}) do
     case parse_competence(competence_str) do
       {:ok, competence_date} ->
         case Importer.import_csv(file_path, competence_date) do
@@ -64,7 +64,7 @@ defmodule PayrollApiWeb.V1.PayrollController do
     end
   end
 
-  def upload(conn, _params) do
+  def import(conn, _params) do
     conn
     |> put_status(:bad_request)
     |> json(%{
@@ -75,6 +75,9 @@ defmodule PayrollApiWeb.V1.PayrollController do
       }
     })
   end
+
+  # Compatibilidade com rota antiga /payroll/upload
+  def upload(conn, params), do: __MODULE__.import(conn, params)
 
   # Converte string de data para Date
   defp parse_competence(competence_str) when is_binary(competence_str) do
