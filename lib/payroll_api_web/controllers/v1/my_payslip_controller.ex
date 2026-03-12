@@ -4,7 +4,7 @@ defmodule PayrollApiWeb.V1.MyPayslipController do
 
   alias PayrollApi.Payroll
   alias PayrollApi.Auth.Guardian
-  alias PayrollApi.Repo
+
   alias PayrollApiWeb.Schemas.{PayslipList, Payslip, ErrorResponse}
 
   action_fallback PayrollApiWeb.FallbackController
@@ -72,7 +72,9 @@ defmodule PayrollApiWeb.V1.MyPayslipController do
     user = Guardian.Plug.current_resource(conn)
     payslips = Payroll.list_my_payslips(user.id)
 
-    render(conn, :index, payslips: payslips)
+    conn
+    |> put_status(:ok)
+    |> render(:index, payslips: payslips)
   end
 
   @doc """
@@ -98,13 +100,10 @@ defmodule PayrollApiWeb.V1.MyPayslipController do
 def download(conn, %{"id" => id}) do
     user = Guardian.Plug.current_resource(conn)
 
-    # Fetch payslip with employee and user preloaded
-    payslip =
-      Payroll.get_my_payslip!(id, user.id)
-      |> Repo.preload(employee: :user)
+    # O PdfGenerator garante os preloads necessários internamente.
+    payslip = Payroll.get_my_payslip!(id, user.id)
 
     case PayrollApi.Payroll.PdfGenerator.generate(payslip) do
-      # O generate/1 retorna a string Base64 que o ChromicPDF produziu
       {:ok, base64_pdf} when is_binary(base64_pdf) ->
 
         # A MÁGICA AQUI: Decodifica de texto Base64 para arquivo binário PDF

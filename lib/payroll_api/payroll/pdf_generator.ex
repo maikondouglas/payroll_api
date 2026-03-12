@@ -2,34 +2,45 @@ defmodule PayrollApi.Payroll.PdfGenerator do
   @moduledoc """
   Módulo para geração de PDFs de contracheques.
 
-  Cria PDFs dos contracheques (payslips) com informações do funcionário,
-  salários e detalhes de rubricas.
+  Gera PDFs a partir da estrutura relacional:
+  payslip -> payslip_items -> rubric.
   """
+
+  alias PayrollApi.Payroll.Payslip
+  alias PayrollApi.Repo
 
   require Logger
 
   @doc """
   Gera um PDF a partir de um contracheque.
 
-  Retorna {:ok, pdf_binary} com o binário PDF pronto para download, ou {:error, reason} em caso de erro.
-  O payslip deve ter o employee precarregado, o qual deve ter o user precarregado.
+  Retorna `{:ok, pdf_binary}` com o binário PDF pronto para download,
+  ou `{:error, reason}` em caso de erro.
 
-  ## Exemplos
-
-      iex> payslip = Repo.get!(Payslip, 1) |> Repo.preload(employee: :user)
-      iex> PayrollApi.Payroll.PdfGenerator.generate(payslip)
-      {:ok, <<37, 80, 68, 70, ...>>}  # Binary PDF data starting with PDF magic bytes
-
-  ## Returns
-
-    - `{:ok, pdf_binary}` - O binário do PDF completamente formatado
-    - `{:error, reason}` - Erro durante geração
+  O próprio generator garante os preloads necessários:
+  - `employee: :user`
+  - `payslip_items: :rubric`
   """
-  def generate(payslip) do
-    # Render HTML string with complete document structure
-    html_string = render_html(payslip)
+  def generate(%Payslip{} = payslip) do
+    payslip = Repo.preload(payslip, [employee: :user, payslip_items: :rubric])
 
-    # Validate HTML has required elements before sending to ChromicPDF
+    {proventos, descontos, bases_rodape} = split_items_by_category(payslip.payslip_items)
+
+    total_proventos = sum_items(proventos)
+    total_descontos = sum_items(descontos)
+    valor_liquido = Decimal.sub(total_proventos, total_descontos)
+
+    html_string =
+      render_html(
+        payslip,
+        proventos,
+        descontos,
+        bases_rodape,
+        total_proventos,
+        total_descontos,
+        valor_liquido
+      )
+
     cond do
       not String.contains?(html_string, "<!DOCTYPE html>") ->
         Logger.error("HTML gerado inválido para contracheque #{payslip.id}: falta <!DOCTYPE html>")
@@ -40,12 +51,12 @@ defmodule PayrollApi.Payroll.PdfGenerator do
         {:error, "HTML structure is invalid - missing closing HTML tag"}
 
       true ->
-        # Convert HTML to PDF using ChromicPDF
         case ChromicPDF.print_to_pdf({:html, html_string}) do
           {:ok, pdf_binary} when is_binary(pdf_binary) and byte_size(pdf_binary) > 0 ->
             Logger.info(
               "PDF gerado com sucesso para contracheque #{payslip.id} (#{byte_size(pdf_binary)} bytes)"
             )
+
             {:ok, pdf_binary}
 
           {:ok, _pdf_binary} ->
@@ -53,23 +64,24 @@ defmodule PayrollApi.Payroll.PdfGenerator do
             {:error, "PDF binary is empty"}
 
           {:error, reason} ->
-            Logger.error(
-              "Erro ao gerar PDF do contracheque #{payslip.id}: #{inspect(reason)}"
-            )
+            Logger.error("Erro ao gerar PDF do contracheque #{payslip.id}: #{inspect(reason)}")
             {:error, reason}
         end
     end
   end
 
-  # Renderiza o HTML do contracheque
-  defp render_html(payslip) do
+  defp render_html(
+         payslip,
+         proventos,
+         descontos,
+         bases_rodape,
+         total_proventos,
+         total_descontos,
+         valor_liquido
+       ) do
     employee = payslip.employee
     user = employee.user
     competence = format_competence(payslip.competence)
-    base_salary = Decimal.to_string(payslip.base_salary)
-    net_salary = Decimal.to_string(payslip.net_salary)
-
-    rubricas_html = render_rubricas(payslip.details)
 
     """
     <!DOCTYPE html>
@@ -79,216 +91,162 @@ defmodule PayrollApi.Payroll.PdfGenerator do
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Contracheque - #{competence}</title>
         <style>
-            * {
+          @page {
+            size: A4;
+            margin: 14mm 12mm;
+          }
+
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { font-family: Arial, sans-serif; background-color: #f5f5f5; padding: 20px; }
+            .container { max-width: 920px; margin: 0 auto; background-color: white; padding: 36px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+            .header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #2c3e50; padding-bottom: 16px; }
+            .header h1 { font-size: 24px; color: #2c3e50; margin-bottom: 5px; }
+            .header p { color: #7f8c8d; font-size: 14px; }
+            .employee-info { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 22px; padding: 16px; background-color: #ecf0f1; border-radius: 5px; }
+            .info-item label { display: block; font-weight: bold; color: #2c3e50; font-size: 12px; text-transform: uppercase; margin-bottom: 4px; }
+            .info-item .value { color: #34495e; font-size: 14px; }
+            .salary-section { margin-bottom: 24px; border-top: 2px solid #bdc3c7; padding-top: 16px; }
+            .salary-section h2 { font-size: 16px; color: #2c3e50; margin-bottom: 12px; font-weight: bold; }
+            .salary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+            .salary-item { padding: 12px; background-color: #f8f9fa; border-radius: 5px; border-left: 4px solid #3498db; }
+            .salary-item label { display: block; font-size: 12px; color: #7f8c8d; text-transform: uppercase; margin-bottom: 4px; font-weight: bold; }
+            .salary-item .value { font-size: 17px; color: #2c3e50; font-weight: bold; }
+            .rubricas-section { margin-top: 22px; border-top: 2px solid #bdc3c7; padding-top: 16px; break-inside: auto; page-break-inside: auto; }
+            .rubricas-section h2 { font-size: 16px; color: #2c3e50; margin-bottom: 12px; font-weight: bold; }
+            .rubricas-table { width: 100%; border-collapse: collapse; }
+            .rubricas-table thead { background-color: #34495e; color: white; }
+            .rubricas-table th { padding: 10px; text-align: left; font-size: 12px; font-weight: bold; text-transform: uppercase; }
+            .rubricas-table td { padding: 9px 10px; border-bottom: 1px solid #ecf0f1; font-size: 12px; }
+            .rubricas-table tr:nth-child(even) { background-color: #f8f9fa; }
+            .rubricas-table .value { text-align: right; font-family: monospace; }
+            .summary-box { margin-top: 20px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; break-inside: auto; page-break-inside: auto; }
+            .summary-item { border: 1px solid #d6dde3; border-radius: 5px; padding: 10px; background-color: #fbfcfd; }
+            .summary-item label { display: block; text-transform: uppercase; color: #6b7c8f; font-size: 11px; margin-bottom: 5px; font-weight: bold; }
+            .summary-item .value { font-size: 15px; color: #2c3e50; font-weight: bold; }
+            .footer-bases { margin-top: 24px; border-top: 2px solid #bdc3c7; padding-top: 14px; break-before: auto; page-break-before: auto; }
+            .footer-bases h3 { font-size: 14px; color: #2c3e50; margin-bottom: 10px; }
+            .bases-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+            .bases-table th { text-align: left; padding: 8px; background: #eef2f6; border-bottom: 1px solid #d6dde3; }
+            .bases-table td { padding: 8px; border-bottom: 1px solid #eef2f6; }
+            .bases-table .value { text-align: right; font-family: monospace; }
+            .footer { margin-top: 30px; text-align: center; color: #95a5a6; font-size: 11px; border-top: 1px solid #bdc3c7; padding-top: 14px; }
+
+            /* Regras para impressão/PDF com quebra otimizada em A4 */
+            .employee-info,
+            .salary-section {
+              break-inside: avoid-page;
+              page-break-inside: avoid;
+            }
+
+            .summary-item {
+              break-inside: avoid-page;
+              page-break-inside: avoid;
+            }
+
+            .rubricas-section h2,
+            .footer-bases h3 {
+              break-after: avoid-page;
+              page-break-after: avoid;
+            }
+
+            .rubricas-table,
+            .bases-table {
+              page-break-inside: auto;
+            }
+
+            .rubricas-table thead,
+            .bases-table thead {
+              display: table-header-group;
+            }
+
+            .rubricas-table tr,
+            .bases-table tr {
+              break-inside: avoid;
+              page-break-inside: avoid;
+            }
+
+            .rubricas-table tfoot,
+            .bases-table tfoot {
+              display: table-footer-group;
+            }
+
+            @media print {
+              body {
+                background: #ffffff;
+                padding: 0;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+              }
+
+              .container {
+                max-width: none;
                 margin: 0;
                 padding: 0;
-                box-sizing: border-box;
-            }
-
-            body {
-                font-family: Arial, sans-serif;
-                background-color: #f5f5f5;
-                padding: 20px;
-            }
-
-            .container {
-                max-width: 900px;
-                margin: 0 auto;
-                background-color: white;
-                padding: 40px;
-                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-            }
-
-            .header {
-                text-align: center;
-                margin-bottom: 40px;
-                border-bottom: 3px solid #2c3e50;
-                padding-bottom: 20px;
-            }
-
-            .header h1 {
-                font-size: 24px;
-                color: #2c3e50;
-                margin-bottom: 5px;
-            }
-
-            .header p {
-                color: #7f8c8d;
-                font-size: 14px;
-            }
-
-            .employee-info {
-                display: grid;
-                grid-template-columns: 1fr 1fr;
-                gap: 20px;
-                margin-bottom: 30px;
-                padding: 20px;
-                background-color: #ecf0f1;
-                border-radius: 5px;
-            }
-
-            .info-item {
-                display: flex;
-                flex-direction: column;
-            }
-
-            .info-item label {
-                font-weight: bold;
-                color: #2c3e50;
-                font-size: 12px;
-                text-transform: uppercase;
-                margin-bottom: 5px;
-            }
-
-            .info-item value {
-                color: #34495e;
-                font-size: 14px;
-            }
-
-            .salary-section {
-                margin-bottom: 30px;
-                border-top: 2px solid #bdc3c7;
-                padding-top: 20px;
-            }
-
-            .salary-section h2 {
-                font-size: 16px;
-                color: #2c3e50;
-                margin-bottom: 15px;
-                font-weight: bold;
-            }
-
-            .salary-grid {
-                display: grid;
-                grid-template-columns: 1fr 1fr;
-                gap: 20px;
-            }
-
-            .salary-item {
-                padding: 15px;
-                background-color: #f8f9fa;
-                border-radius: 5px;
-                border-left: 4px solid #3498db;
-            }
-
-            .salary-item label {
-                display: block;
-                font-size: 12px;
-                color: #7f8c8d;
-                text-transform: uppercase;
-                margin-bottom: 5px;
-                font-weight: bold;
-            }
-
-            .salary-item .value {
-                font-size: 18px;
-                color: #2c3e50;
-                font-weight: bold;
-            }
-
-            .rubricas-section {
-                margin-top: 30px;
-                border-top: 2px solid #bdc3c7;
-                padding-top: 20px;
-            }
-
-            .rubricas-section h2 {
-                font-size: 16px;
-                color: #2c3e50;
-                margin-bottom: 15px;
-                font-weight: bold;
-            }
-
-            .rubricas-table {
-                width: 100%;
-                border-collapse: collapse;
-            }
-
-            .rubricas-table thead {
-                background-color: #34495e;
-                color: white;
-            }
-
-            .rubricas-table th {
-                padding: 12px;
-                text-align: left;
-                font-size: 12px;
-                font-weight: bold;
-                text-transform: uppercase;
-            }
-
-            .rubricas-table td {
-                padding: 10px 12px;
-                border-bottom: 1px solid #ecf0f1;
-                font-size: 13px;
-            }
-
-            .rubricas-table tr:nth-child(even) {
-                background-color: #f8f9fa;
-            }
-
-            .rubricas-table .value {
-                text-align: right;
-                font-family: monospace;
-            }
-
-            .footer {
-                margin-top: 40px;
-                text-align: center;
-                color: #95a5a6;
-                font-size: 11px;
-                border-top: 1px solid #bdc3c7;
-                padding-top: 20px;
+                box-shadow: none;
+              }
             }
         </style>
     </head>
     <body>
         <div class="container">
-            <!-- Header -->
             <div class="header">
                 <h1>CONTRACHEQUE</h1>
                 <p>Período: #{competence}</p>
             </div>
 
-            <!-- Informações do Funcionário -->
             <div class="employee-info">
                 <div class="info-item">
                     <label>Nome</label>
-                    <value>#{user.name}</value>
+                    <div class="value">#{html_escape(user.name)}</div>
                 </div>
                 <div class="info-item">
                     <label>CPF</label>
-                    <value>#{format_cpf(user.cpf)}</value>
+                    <div class="value">#{format_cpf(user.cpf)}</div>
                 </div>
                 <div class="info-item">
                     <label>Matrícula</label>
-                    <value>#{employee.registration}</value>
+                    <div class="value">#{html_escape(employee.registration)}</div>
                 </div>
                 <div class="info-item">
                     <label>Função</label>
-                    <value>#{employee.job_title}</value>
+                    <div class="value">#{html_escape(employee.job_title)}</div>
                 </div>
             </div>
 
-            <!-- Salários -->
             <div class="salary-section">
                 <h2>Resumo de Salários</h2>
                 <div class="salary-grid">
                     <div class="salary-item">
                         <label>Salário Base</label>
-                        <div class="value">R$ #{format_currency(base_salary)}</div>
+                        <div class="value">#{format_money(payslip.base_salary)}</div>
                     </div>
                     <div class="salary-item">
-                        <label>Salário Líquido</label>
-                        <div class="value">R$ #{format_currency(net_salary)}</div>
+                        <label>Salário Líquido (Cadastro)</label>
+                        <div class="value">#{format_money(payslip.net_salary)}</div>
                     </div>
                 </div>
             </div>
 
-            <!-- Rubricas -->
-            #{rubricas_html}
+            #{render_financial_section("Proventos (Vencimentos)", proventos)}
+            #{render_financial_section("Descontos", descontos)}
 
-            <!-- Footer -->
+            <div class="summary-box">
+                <div class="summary-item">
+                    <label>Total de Vencimentos</label>
+                    <div class="value">#{format_money(total_proventos)}</div>
+                </div>
+                <div class="summary-item">
+                    <label>Total de Descontos</label>
+                    <div class="value">#{format_money(total_descontos)}</div>
+                </div>
+                <div class="summary-item">
+                    <label>Valor Líquido (Proventos - Descontos)</label>
+                    <div class="value">#{format_money(valor_liquido)}</div>
+                </div>
+            </div>
+
+            #{render_footer_bases(bases_rodape)}
+
             <div class="footer">
                 <p>Este é um documento confidencial gerado automaticamente pelo sistema Payroll API.</p>
                 <p>Data de Emissão: #{format_current_date()}</p>
@@ -299,65 +257,132 @@ defmodule PayrollApi.Payroll.PdfGenerator do
     """
   end
 
-  # Renderiza a tabela de rubricas
-  defp render_rubricas(details) when is_map(details) and map_size(details) > 0 do
-    rubricas_rows =
-      details
-      |> Enum.map(fn {rubrica, valor} ->
-        """
-        <tr>
-            <td>#{rubrica}</td>
-            <td class="value">#{format_rubrica_value(valor)}</td>
-        </tr>
-        """
-      end)
+  defp render_financial_section(_title, []), do: ""
+
+  defp render_financial_section(title, items) do
+    rows =
+      items
+      |> Enum.map(&render_item_row/1)
       |> Enum.join()
 
     """
     <div class="rubricas-section">
-        <h2>Detalhes de Rubricas</h2>
+        <h2>#{title}</h2>
         <table class="rubricas-table">
             <thead>
                 <tr>
-                    <th>Rubrica</th>
+                    <th>Código</th>
+                    <th>Descrição</th>
+                    <th>Referência</th>
                     <th style="text-align: right;">Valor</th>
                 </tr>
             </thead>
             <tbody>
-                #{rubricas_rows}
+                #{rows}
             </tbody>
         </table>
     </div>
     """
   end
 
-  defp render_rubricas(_), do: ""
+  defp render_item_row(item) do
+    rubric = item.rubric
+    reference = item.reference || "-"
 
-  # Formata a competência para exibição
-  defp format_competence(competence) do
-    case competence do
-      %Date{} ->
-        competence
-        |> Calendar.strftime("%B de %Y")
-        |> String.replace("January", "Janeiro")
-        |> String.replace("February", "Fevereiro")
-        |> String.replace("March", "Março")
-        |> String.replace("April", "Abril")
-        |> String.replace("May", "Maio")
-        |> String.replace("June", "Junho")
-        |> String.replace("July", "Julho")
-        |> String.replace("August", "Agosto")
-        |> String.replace("September", "Setembro")
-        |> String.replace("October", "Outubro")
-        |> String.replace("November", "Novembro")
-        |> String.replace("December", "Dezembro")
-
-      _ ->
-        "N/A"
-    end
+    """
+    <tr>
+        <td>#{html_escape(rubric.code)}</td>
+        <td>#{html_escape(rubric.description)}</td>
+        <td>#{html_escape(reference)}</td>
+        <td class="value">#{format_money(item.amount)}</td>
+    </tr>
+    """
   end
 
-  # Formata CPF com máscara
+  defp render_footer_bases([]), do: ""
+
+  defp render_footer_bases(items) do
+    rows =
+      items
+      |> Enum.map(fn item ->
+        """
+        <tr>
+            <td>#{html_escape(item.rubric.code)}</td>
+            <td>#{html_escape(item.rubric.description)}</td>
+            <td>#{html_escape(item.rubric.category)}</td>
+            <td>#{html_escape(item.reference || "-")}</td>
+            <td class="value">#{format_money(item.amount)}</td>
+        </tr>
+        """
+      end)
+      |> Enum.join()
+
+    """
+    <div class="footer-bases">
+      <h3>Bases, Encargos e Informativas</h3>
+      <table class="bases-table">
+        <thead>
+          <tr>
+            <th>Código</th>
+            <th>Descrição</th>
+            <th>Categoria</th>
+            <th>Referência</th>
+            <th style="text-align: right;">Valor</th>
+          </tr>
+        </thead>
+        <tbody>
+          #{rows}
+        </tbody>
+      </table>
+    </div>
+    """
+  end
+
+  defp split_items_by_category(items) do
+    items
+    |> Enum.filter(&valid_rubric_item?/1)
+    |> Enum.reduce({[], [], []}, fn item, {proventos, descontos, bases_rodape} ->
+      case item.rubric.category do
+        "provento" -> {[item | proventos], descontos, bases_rodape}
+        "desconto" -> {proventos, [item | descontos], bases_rodape}
+        "base" -> {proventos, descontos, [item | bases_rodape]}
+        "encargo" -> {proventos, descontos, [item | bases_rodape]}
+        "informativa" -> {proventos, descontos, [item | bases_rodape]}
+        _ -> {proventos, descontos, bases_rodape}
+      end
+    end)
+    |> then(fn {p, d, b} -> {Enum.reverse(p), Enum.reverse(d), Enum.reverse(b)} end)
+  end
+
+  defp valid_rubric_item?(item) do
+    item.rubric && is_binary(item.rubric.code) && is_binary(item.rubric.category)
+  end
+
+  defp sum_items(items) do
+    Enum.reduce(items, Decimal.new("0"), fn item, acc ->
+      Decimal.add(acc, item.amount || Decimal.new("0"))
+    end)
+  end
+
+  defp format_competence(%Date{} = competence) do
+    competence
+    |> Calendar.strftime("%B de %Y")
+    |> String.replace("January", "Janeiro")
+    |> String.replace("February", "Fevereiro")
+    |> String.replace("March", "Março")
+    |> String.replace("April", "Abril")
+    |> String.replace("May", "Maio")
+    |> String.replace("June", "Junho")
+    |> String.replace("July", "Julho")
+    |> String.replace("August", "Agosto")
+    |> String.replace("September", "Setembro")
+    |> String.replace("October", "Outubro")
+    |> String.replace("November", "Novembro")
+    |> String.replace("December", "Dezembro")
+  end
+
+  defp format_competence(_), do: "N/A"
+
   defp format_cpf(cpf) when is_binary(cpf) and byte_size(cpf) == 11 do
     <<a::binary-size(3), b::binary-size(3), c::binary-size(3), d::binary-size(2)>> = cpf
     "#{a}.#{b}.#{c}-#{d}"
@@ -365,27 +390,51 @@ defmodule PayrollApi.Payroll.PdfGenerator do
 
   defp format_cpf(cpf), do: cpf
 
-  # Formata valor para moeda
-  defp format_currency(value) when is_binary(value) do
+  # Formata decimal para moeda brasileira: R$ 1.234,56
+  defp format_money(%Decimal{} = value) do
     value
-    |> String.split(".")
-    |> case do
-      [integer] -> "#{integer},00"
-      [integer, decimal] -> "#{integer},#{String.pad_trailing(decimal, 2, "0")}"
-      _ -> "0,00"
+    |> Decimal.round(2)
+    |> Decimal.to_string(:normal)
+    |> format_number_pt_br()
+    |> then(&"R$ #{&1}")
+  end
+
+  defp format_money(value) when is_binary(value) do
+    case Decimal.parse(value) do
+      {decimal, _} -> format_money(decimal)
+      :error -> "R$ 0,00"
     end
   end
 
-  defp format_currency(_), do: "0,00"
+  defp format_money(_), do: "R$ 0,00"
 
-  # Formata valor de rubrica
-  defp format_rubrica_value(value) when is_binary(value) do
-    "R$ #{format_currency(value)}"
+  defp format_number_pt_br(number_string) do
+    [int_part, dec_part] =
+      number_string
+      |> String.split(".")
+      |> case do
+        [int] -> [int, "00"]
+        [int, dec] -> [int, String.pad_trailing(dec, 2, "0") |> String.slice(0, 2)]
+      end
+
+    formatted_int =
+      int_part
+      |> String.reverse()
+      |> String.replace(~r/(\d{3})(?=\d)/, "\\1.")
+      |> String.reverse()
+
+    "#{formatted_int},#{dec_part}"
   end
 
-  defp format_rubrica_value(_), do: "R$ 0,00"
+  defp html_escape(nil), do: ""
 
-  # Formata a data atual
+  defp html_escape(value) do
+    value
+    |> to_string()
+    |> Phoenix.HTML.html_escape()
+    |> Phoenix.HTML.safe_to_string()
+  end
+
   defp format_current_date do
     Date.utc_today()
     |> Calendar.strftime("%d de %B de %Y")

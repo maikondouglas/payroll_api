@@ -10,6 +10,7 @@ defmodule PayrollApi.Payroll.Payslip do
   import Ecto.Changeset
 
   alias PayrollApi.HR.Employee
+  alias PayrollApi.Payroll.PayslipItem
 
   schema "payslips" do
     field :competence, :date
@@ -18,6 +19,7 @@ defmodule PayrollApi.Payroll.Payslip do
     field :details, :map, default: %{}
 
     belongs_to :employee, Employee
+    has_many :payslip_items, PayslipItem, foreign_key: :payslip_id, on_delete: :delete_all
 
     timestamps(type: :utc_datetime)
   end

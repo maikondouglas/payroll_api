@@ -12,6 +12,10 @@ defmodule PayrollApiWeb.Router do
     plug PayrollApi.Auth.Pipeline
   end
 
+  pipeline :admin do
+    plug PayrollApiWeb.Plugs.RequireAdmin
+  end
+
   # --- ROTAS V1 ---
   scope "/api/v1", PayrollApiWeb.V1, as: :v1 do
     pipe_through :api
@@ -30,6 +34,12 @@ defmodule PayrollApiWeb.Router do
       get "/my-payslips", MyPayslipController, :index
       get "/my-payslips/:id", MyPayslipController, :show
       get "/my-payslips/:id/download", MyPayslipController, :download
+    end
+
+    scope "/" do
+      pipe_through [:auth, :admin]
+
+      resources "/rubrics", RubricController, except: [:new, :edit]
     end
   end
 
