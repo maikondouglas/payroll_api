@@ -36,8 +36,9 @@ defmodule PayrollApi.Application do
   # ChromicPDF configuration for Docker environment
   defp chromic_pdf_opts do
     [
-      chrome_args: "--no-sandbox --disable-dev-shm-usage --disable-gpu",
-      discard_stderr: false
+      chrome_args:
+        "--headless=new --no-sandbox --disable-dev-shm-usage --disable-gpu --disable-software-rasterizer --disable-webgl",
+      discard_stderr: true
     ]
   end
 end

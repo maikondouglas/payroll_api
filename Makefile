@@ -57,7 +57,7 @@ setup: ## Setup inicial do banco (create + migrate + seed)
 	$(DOCKER_CMD) exec web mix ecto.setup
 
 reset: ## Reset completo do banco
-	$(DOCKER_CMD) exec web mix ecto.reset
+	$(DOCKER_CMD) run --rm web sh -lc "mix deps.get && mix ecto.reset"
 
 routes: ## Mostra todas as rotas da aplicação
 	$(DOCKER_CMD) exec web mix phx.routes
