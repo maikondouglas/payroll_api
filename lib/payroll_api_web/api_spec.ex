@@ -1,9 +1,9 @@
 defmodule PayrollApiWeb.ApiSpec do
   @moduledoc """
-  Especificação OpenAPI para a Payroll API.
+  OpenAPI specification for Payroll API.
 
-  Define a documentação Swagger/OpenAPI completa da API,
-  incluindo informações gerais, esquemas de segurança e endpoints.
+  Defines the full Swagger/OpenAPI documentation for the API,
+  including general information, security schemes, and endpoints.
   """
 
   alias OpenApiSpex.{Info, OpenApi, Paths, Server, Components, SecurityScheme}
@@ -17,17 +17,17 @@ defmodule PayrollApiWeb.ApiSpec do
         title: "Payroll API",
         version: "1.0.0",
         description: """
-        API RESTful para gerenciamento de folha de pagamento.
+        RESTful API for payroll management.
 
-        ## Autenticação
+        ## Authentication
 
-        A maioria dos endpoints requer autenticação via token JWT.
-        Use o endpoint `/api/v1/login` para obter o token e inclua-o
-        no header `Authorization: Bearer {token}` nas requisições protegidas.
+        Most endpoints require JWT authentication.
+        Use `/api/v1/login` to obtain a token and include it
+        in the `Authorization: Bearer {token}` header for protected requests.
 
-        ## Versionamento
+        ## Versioning
 
-        A API está versionada e todas as rotas começam com `/api/v1`.
+        The API is versioned and all routes start with `/api/v1`.
         """
       },
       servers: [
@@ -40,7 +40,7 @@ defmodule PayrollApiWeb.ApiSpec do
             type: "http",
             scheme: "bearer",
             bearerFormat: "JWT",
-            description: "Token JWT obtido através do endpoint de login"
+            description: "JWT token obtained from the login endpoint"
           }
         }
       },

@@ -7,19 +7,19 @@ defmodule PayrollApiWeb.V1.EmployeeImportController do
 
   require Logger
 
-  tags(["RH"])
+  tags(["HR"])
 
   operation(:import,
-    summary: "Importar funcionarios via CSV",
+    summary: "Import employees from CSV",
     description:
-      "Faz upload de um CSV de RH para cadastrar ou atualizar funcionários a partir de Matrícula, Nome, Função, Admissão, CPF e Nascimento.",
+      "Uploads an HR CSV file to create or update employees using registration, name, job title, hire date, CPF, and birth date.",
     security: [%{"bearer" => []}],
-    request_body: {"Arquivo CSV", "multipart/form-data", EmployeeImportRequest},
+    request_body: {"CSV file", "multipart/form-data", EmployeeImportRequest},
     responses: [
-      ok: {"Importacao realizada", "application/json", PayrollUploadResponse},
-      bad_request: {"Parametros ausentes, cabeçalho inválido ou CSV malformado", "application/json", ErrorResponse},
-      internal_server_error: {"Erro ao processar arquivo", "application/json", ErrorResponse},
-      unauthorized: {"Token ausente ou invalido", "application/json", ErrorResponse}
+      ok: {"Import completed", "application/json", PayrollUploadResponse},
+      bad_request: {"Missing parameters, invalid header, or malformed CSV", "application/json", ErrorResponse},
+      internal_server_error: {"Failed to process file", "application/json", ErrorResponse},
+      unauthorized: {"Missing or invalid token", "application/json", ErrorResponse}
     ]
   )
 
@@ -29,25 +29,25 @@ defmodule PayrollApiWeb.V1.EmployeeImportController do
         conn
         |> put_status(:ok)
         |> json(%{
-          "message" => "Importacao de funcionarios concluida",
+          "message" => "Employee import completed",
           "success" => result.success,
           "errors" => result.errors,
           "details" => format_details(result.details)
         })
 
       {:error, reason} ->
-        Logger.error("Erro na importacao de funcionarios: #{inspect(reason)}")
+        Logger.error("Employee import failed: #{inspect(reason)}")
 
         conn
         |> put_status(error_status(reason))
-        |> json(%{"error" => "Erro ao processar arquivo", "details" => reason})
+        |> json(%{"error" => "Failed to process file", "details" => reason})
     end
   end
 
   def import(conn, _params) do
     conn
     |> put_status(:bad_request)
-    |> json(%{"error" => "Parametro obrigatorio: file (arquivo CSV)"})
+    |> json(%{"error" => "Required parameter: file (CSV file)"})
   end
 
   defp format_details(details) do

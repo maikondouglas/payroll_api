@@ -1,21 +1,21 @@
 defmodule PayrollApiWeb.Schemas.MeResponse do
   @moduledoc """
-  Schema para resposta do endpoint /me.
+  Schema for the /me endpoint response.
   """
   require OpenApiSpex
   alias OpenApiSpex.Schema
 
   OpenApiSpex.schema(%{
     title: "MeResponse",
-    description: "Dados do usuário autenticado",
+    description: "Authenticated user data",
     type: :object,
     properties: %{
-      id: %Schema{type: :integer, description: "ID do usuário", example: 1},
-      name: %Schema{type: :string, description: "Nome do usuário", example: "João Silva"},
-      cpf: %Schema{type: :string, description: "CPF do usuário", example: "12345678901"},
+      id: %Schema{type: :integer, description: "User ID", example: 1},
+      name: %Schema{type: :string, description: "User name", example: "Joao Silva"},
+      cpf: %Schema{type: :string, description: "User CPF", example: "12345678901"},
       role: %Schema{
         type: :string,
-        description: "Papel do usuário",
+        description: "User role",
         enum: ["admin", "employee"],
         example: "employee"
       }

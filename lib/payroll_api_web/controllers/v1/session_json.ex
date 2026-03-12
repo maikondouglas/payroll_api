@@ -5,7 +5,7 @@ defmodule PayrollApiWeb.V1.SessionJSON do
 
   def show(%{user: user, token: token}) do
     %{
-      "message" => "Login realizado com sucesso",
+      "message" => "Login completed successfully",
       "token" => token,
       "user" => %{
         "id" => user.id,

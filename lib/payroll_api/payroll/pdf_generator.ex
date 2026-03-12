@@ -24,47 +24,51 @@ defmodule PayrollApi.Payroll.PdfGenerator do
   def generate(%Payslip{} = payslip) do
     payslip = Repo.preload(payslip, [employee: :user, payslip_items: :rubric])
 
-    {proventos, descontos, bases_rodape} = split_items_by_category(payslip.payslip_items)
+    {earnings, deductions, footer_items} = split_items_by_category(payslip.payslip_items)
 
-    total_proventos = sum_items(proventos)
-    total_descontos = sum_items(descontos)
-    valor_liquido = Decimal.sub(total_proventos, total_descontos)
+    total_earnings = sum_items(earnings)
+    total_deductions = sum_items(deductions)
+
+    net_amount =
+      payslip.base_salary
+      |> Decimal.add(total_earnings)
+      |> Decimal.sub(total_deductions)
 
     html_string =
       render_html(
         payslip,
-        proventos,
-        descontos,
-        bases_rodape,
-        total_proventos,
-        total_descontos,
-        valor_liquido
+        earnings,
+        deductions,
+        footer_items,
+        total_earnings,
+        total_deductions,
+        net_amount
       )
 
     cond do
       not String.contains?(html_string, "<!DOCTYPE html>") ->
-        Logger.error("HTML gerado inválido para contracheque #{payslip.id}: falta <!DOCTYPE html>")
+        Logger.error("Invalid HTML generated for payslip #{payslip.id}: missing <!DOCTYPE html>")
         {:error, "HTML structure is invalid - missing DOCTYPE"}
 
       not String.contains?(html_string, "</html>") ->
-        Logger.error("HTML gerado inválido para contracheque #{payslip.id}: falta fechamento </html>")
+        Logger.error("Invalid HTML generated for payslip #{payslip.id}: missing closing </html>")
         {:error, "HTML structure is invalid - missing closing HTML tag"}
 
       true ->
         case ChromicPDF.print_to_pdf({:html, html_string}) do
           {:ok, pdf_binary} when is_binary(pdf_binary) and byte_size(pdf_binary) > 0 ->
             Logger.info(
-              "PDF gerado com sucesso para contracheque #{payslip.id} (#{byte_size(pdf_binary)} bytes)"
+              "PDF generated successfully for payslip #{payslip.id} (#{byte_size(pdf_binary)} bytes)"
             )
 
             {:ok, pdf_binary}
 
           {:ok, _pdf_binary} ->
-            Logger.error("PDF gerado vazio para contracheque #{payslip.id}")
+            Logger.error("Empty PDF generated for payslip #{payslip.id}")
             {:error, "PDF binary is empty"}
 
           {:error, reason} ->
-            Logger.error("Erro ao gerar PDF do contracheque #{payslip.id}: #{inspect(reason)}")
+            Logger.error("Failed to generate PDF for payslip #{payslip.id}: #{inspect(reason)}")
             {:error, reason}
         end
     end
@@ -72,12 +76,12 @@ defmodule PayrollApi.Payroll.PdfGenerator do
 
   defp render_html(
          payslip,
-         proventos,
-         descontos,
-         bases_rodape,
-         total_proventos,
-         total_descontos,
-         valor_liquido
+         earnings,
+         deductions,
+         footer_items,
+         total_earnings,
+         total_deductions,
+         net_amount
        ) do
     employee = payslip.employee
     user = employee.user
@@ -85,11 +89,11 @@ defmodule PayrollApi.Payroll.PdfGenerator do
 
     """
     <!DOCTYPE html>
-    <html lang="pt-BR">
+    <html lang="en">
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Contracheque - #{competence}</title>
+        <title>Payslip - #{competence}</title>
         <style>
           @page {
             size: A4;
@@ -111,14 +115,14 @@ defmodule PayrollApi.Payroll.PdfGenerator do
             .salary-item { padding: 12px; background-color: #f8f9fa; border-radius: 5px; border-left: 4px solid #3498db; }
             .salary-item label { display: block; font-size: 12px; color: #7f8c8d; text-transform: uppercase; margin-bottom: 4px; font-weight: bold; }
             .salary-item .value { font-size: 17px; color: #2c3e50; font-weight: bold; }
-            .rubricas-section { margin-top: 22px; border-top: 2px solid #bdc3c7; padding-top: 16px; break-inside: auto; page-break-inside: auto; }
-            .rubricas-section h2 { font-size: 16px; color: #2c3e50; margin-bottom: 12px; font-weight: bold; }
-            .rubricas-table { width: 100%; border-collapse: collapse; }
-            .rubricas-table thead { background-color: #34495e; color: white; }
-            .rubricas-table th { padding: 10px; text-align: left; font-size: 12px; font-weight: bold; text-transform: uppercase; }
-            .rubricas-table td { padding: 9px 10px; border-bottom: 1px solid #ecf0f1; font-size: 12px; }
-            .rubricas-table tr:nth-child(even) { background-color: #f8f9fa; }
-            .rubricas-table .value { text-align: right; font-family: monospace; }
+            .rubrics-section { margin-top: 22px; border-top: 2px solid #bdc3c7; padding-top: 16px; break-inside: auto; page-break-inside: auto; }
+            .rubrics-section h2 { font-size: 16px; color: #2c3e50; margin-bottom: 12px; font-weight: bold; }
+            .rubrics-table { width: 100%; border-collapse: collapse; }
+            .rubrics-table thead { background-color: #34495e; color: white; }
+            .rubrics-table th { padding: 10px; text-align: left; font-size: 12px; font-weight: bold; text-transform: uppercase; }
+            .rubrics-table td { padding: 9px 10px; border-bottom: 1px solid #ecf0f1; font-size: 12px; }
+            .rubrics-table tr:nth-child(even) { background-color: #f8f9fa; }
+            .rubrics-table .value { text-align: right; font-family: monospace; }
             .summary-box { margin-top: 20px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; break-inside: auto; page-break-inside: auto; }
             .summary-item { border: 1px solid #d6dde3; border-radius: 5px; padding: 10px; background-color: #fbfcfd; }
             .summary-item label { display: block; text-transform: uppercase; color: #6b7c8f; font-size: 11px; margin-bottom: 5px; font-weight: bold; }
@@ -143,29 +147,29 @@ defmodule PayrollApi.Payroll.PdfGenerator do
               page-break-inside: avoid;
             }
 
-            .rubricas-section h2,
+            .rubrics-section h2,
             .footer-bases h3 {
               break-after: avoid-page;
               page-break-after: avoid;
             }
 
-            .rubricas-table,
+            .rubrics-table,
             .bases-table {
               page-break-inside: auto;
             }
 
-            .rubricas-table thead,
+            .rubrics-table thead,
             .bases-table thead {
               display: table-header-group;
             }
 
-            .rubricas-table tr,
+            .rubrics-table tr,
             .bases-table tr {
               break-inside: avoid;
               page-break-inside: avoid;
             }
 
-            .rubricas-table tfoot,
+            .rubrics-table tfoot,
             .bases-table tfoot {
               display: table-footer-group;
             }
@@ -190,13 +194,13 @@ defmodule PayrollApi.Payroll.PdfGenerator do
     <body>
         <div class="container">
             <div class="header">
-                <h1>CONTRACHEQUE</h1>
-                <p>Período: #{competence}</p>
+                <h1>PAYSLIP</h1>
+                <p>Period: #{competence}</p>
             </div>
 
             <div class="employee-info">
                 <div class="info-item">
-                    <label>Nome</label>
+                    <label>Name</label>
                     <div class="value">#{html_escape(user.name)}</div>
                 </div>
                 <div class="info-item">
@@ -204,52 +208,52 @@ defmodule PayrollApi.Payroll.PdfGenerator do
                     <div class="value">#{format_cpf(user.cpf)}</div>
                 </div>
                 <div class="info-item">
-                    <label>Matrícula</label>
+                    <label>Registration</label>
                     <div class="value">#{html_escape(employee.registration)}</div>
                 </div>
                 <div class="info-item">
-                    <label>Função</label>
+                    <label>Job Title</label>
                     <div class="value">#{html_escape(employee.job_title)}</div>
                 </div>
             </div>
 
             <div class="salary-section">
-                <h2>Resumo de Salários</h2>
+                  <h2>Salary Summary</h2>
                 <div class="salary-grid">
                     <div class="salary-item">
-                        <label>Salário Base</label>
+                      <label>Base Salary</label>
                         <div class="value">#{format_money(payslip.base_salary)}</div>
                     </div>
                     <div class="salary-item">
-                        <label>Salário Líquido (Cadastro)</label>
+                      <label>Stored Net Salary</label>
                         <div class="value">#{format_money(payslip.net_salary)}</div>
                     </div>
                 </div>
             </div>
 
-            #{render_financial_section("Proventos (Vencimentos)", proventos)}
-            #{render_financial_section("Descontos", descontos)}
+                #{render_financial_section("Earnings", earnings)}
+                #{render_financial_section("Deductions", deductions)}
 
             <div class="summary-box">
                 <div class="summary-item">
-                    <label>Total de Vencimentos</label>
-                    <div class="value">#{format_money(total_proventos)}</div>
+                    <label>Total Earnings</label>
+                    <div class="value">#{format_money(total_earnings)}</div>
                 </div>
                 <div class="summary-item">
-                    <label>Total de Descontos</label>
-                    <div class="value">#{format_money(total_descontos)}</div>
+                    <label>Total Deductions</label>
+                    <div class="value">#{format_money(total_deductions)}</div>
                 </div>
                 <div class="summary-item">
-                    <label>Valor Líquido (Proventos - Descontos)</label>
-                    <div class="value">#{format_money(valor_liquido)}</div>
+                    <label>Net Amount</label>
+                    <div class="value">#{format_money(net_amount)}</div>
                 </div>
             </div>
 
-            #{render_footer_bases(bases_rodape)}
+                #{render_footer_bases(footer_items)}
 
             <div class="footer">
-                <p>Este é um documento confidencial gerado automaticamente pelo sistema Payroll API.</p>
-                <p>Data de Emissão: #{format_current_date()}</p>
+                <p>This is a confidential document generated automatically by the Payroll API system.</p>
+                  <p>Issued on: #{format_current_date()}</p>
             </div>
         </div>
     </body>
@@ -266,15 +270,15 @@ defmodule PayrollApi.Payroll.PdfGenerator do
       |> Enum.join()
 
     """
-    <div class="rubricas-section">
+    <div class="rubrics-section">
         <h2>#{title}</h2>
-        <table class="rubricas-table">
+      <table class="rubrics-table">
             <thead>
                 <tr>
-                    <th>Código</th>
-                    <th>Descrição</th>
-                    <th>Referência</th>
-                    <th style="text-align: right;">Valor</th>
+            <th>Code</th>
+            <th>Description</th>
+            <th>Reference</th>
+            <th style="text-align: right;">Amount</th>
                 </tr>
             </thead>
             <tbody>
@@ -319,15 +323,15 @@ defmodule PayrollApi.Payroll.PdfGenerator do
 
     """
     <div class="footer-bases">
-      <h3>Bases, Encargos e Informativas</h3>
+      <h3>Base, Charge, and Informational Items</h3>
       <table class="bases-table">
         <thead>
           <tr>
-            <th>Código</th>
-            <th>Descrição</th>
-            <th>Categoria</th>
-            <th>Referência</th>
-            <th style="text-align: right;">Valor</th>
+            <th>Code</th>
+            <th>Description</th>
+            <th>Category</th>
+            <th>Reference</th>
+            <th style="text-align: right;">Amount</th>
           </tr>
         </thead>
         <tbody>
@@ -364,22 +368,7 @@ defmodule PayrollApi.Payroll.PdfGenerator do
     end)
   end
 
-  defp format_competence(%Date{} = competence) do
-    competence
-    |> Calendar.strftime("%B de %Y")
-    |> String.replace("January", "Janeiro")
-    |> String.replace("February", "Fevereiro")
-    |> String.replace("March", "Março")
-    |> String.replace("April", "Abril")
-    |> String.replace("May", "Maio")
-    |> String.replace("June", "Junho")
-    |> String.replace("July", "Julho")
-    |> String.replace("August", "Agosto")
-    |> String.replace("September", "Setembro")
-    |> String.replace("October", "Outubro")
-    |> String.replace("November", "Novembro")
-    |> String.replace("December", "Dezembro")
-  end
+  defp format_competence(%Date{} = competence), do: Calendar.strftime(competence, "%B %Y")
 
   defp format_competence(_), do: "N/A"
 
@@ -437,18 +426,6 @@ defmodule PayrollApi.Payroll.PdfGenerator do
 
   defp format_current_date do
     Date.utc_today()
-    |> Calendar.strftime("%d de %B de %Y")
-    |> String.replace("January", "Janeiro")
-    |> String.replace("February", "Fevereiro")
-    |> String.replace("March", "Março")
-    |> String.replace("April", "Abril")
-    |> String.replace("May", "Maio")
-    |> String.replace("June", "Junho")
-    |> String.replace("July", "Julho")
-    |> String.replace("August", "Agosto")
-    |> String.replace("September", "Setembro")
-    |> String.replace("October", "Outubro")
-    |> String.replace("November", "Novembro")
-    |> String.replace("December", "Dezembro")
+    |> Calendar.strftime("%d %B %Y")
   end
 end

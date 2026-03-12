@@ -1,24 +1,24 @@
 defmodule PayrollApiWeb.Schemas.ImportDetail do
   @moduledoc """
-  Schema para detalhe de importação (sucesso ou erro).
+  Schema for import row details.
   """
   require OpenApiSpex
   alias OpenApiSpex.Schema
 
   OpenApiSpex.schema(%{
     title: "ImportDetail",
-    description: "Resultado de importação de uma linha",
+    description: "Import result for a single row",
     type: :object,
     properties: %{
       status: %Schema{
         type: :string,
         enum: ["success", "error"],
-        description: "Status da importação",
+        description: "Import status",
         example: "success"
       },
       data: %Schema{
         type: :object,
-        description: "Dados do resultado (sucesso ou erro)"
+        description: "Result payload for the processed row"
       }
     }
   })

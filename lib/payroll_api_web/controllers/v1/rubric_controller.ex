@@ -8,18 +8,18 @@ defmodule PayrollApiWeb.V1.RubricController do
 
   action_fallback PayrollApiWeb.FallbackController
 
-  tags(["Rubricas"])
+  tags(["Rubrics"])
 
   operation(:create,
-    summary: "Criar ou atualizar rubricas em lote",
+    summary: "Create or update rubrics in bulk",
     description:
-      "Recebe um array JSON de rubricas e executa criação/atualização em lote usando o código como chave de conflito.",
+      "Receives a JSON array of rubrics and performs bulk create or update using the rubric code as the conflict key.",
     security: [%{"bearer" => []}],
-    request_body: {"Lista de rubricas", "application/json", RubricBulkUpsertRequest},
+    request_body: {"Rubric list", "application/json", RubricBulkUpsertRequest},
     responses: [
-      created: {"Rubricas importadas", "application/json", RubricBulkUpsertResponse},
-      bad_request: {"Payload inválido ou falha de importação", "application/json", ErrorResponse},
-      unauthorized: {"Token ausente ou inválido", "application/json", ErrorResponse}
+      created: {"Rubrics imported", "application/json", RubricBulkUpsertResponse},
+      bad_request: {"Invalid payload or import failure", "application/json", ErrorResponse},
+      unauthorized: {"Missing or invalid token", "application/json", ErrorResponse}
     ]
   )
 
@@ -49,41 +49,40 @@ defmodule PayrollApiWeb.V1.RubricController do
   # 1. Captura quando o Insomnia enviar um Array JSON (lista de rubricas)
   def create(conn, %{"_json" => rubrics_params}) when is_list(rubrics_params) do
     # Chama a função de contexto que cria várias de uma vez
-    case PayrollApi.Payroll.create_rubrics_in_bulk(rubrics_params) do
+    case PayrollApi.Payroll.create_rubrics_in_bulk(Enum.map(rubrics_params, &normalize_rubric_params/1)) do
       {count, nil} ->
         conn
         |> put_status(:created)
-        |> json(%{message: "#{count} rubricas importadas/atualizadas com sucesso!", count: count})
+        |> json(%{message: "#{count} rubrics imported or updated successfully", count: count})
 
       {:error, reason} ->
         conn
         |> put_status(:bad_request)
-        |> json(%{error: "Falha ao importar rubricas em lote", details: reason})
+        |> json(%{error: "Failed to import rubrics in bulk", details: reason})
     end
   end
 
   # 2. Captura quando vier um único objeto padrão do Phoenix (ex: {"rubric": {...}})
   def create(conn, %{"rubric" => rubric_params}) do
-    with {:ok, %Rubric{} = rubric} <- PayrollApi.Payroll.create_rubric(rubric_params) do
+    with {:ok, %Rubric{} = rubric} <- PayrollApi.Payroll.create_rubric(normalize_rubric_params(rubric_params)) do
       conn
       |> put_status(:created)
-      # Aqui você pode chamar a sua view render("show.json", rubric: rubric) ou devolver json puro
-      |> json(%{message: "Rubrica criada com sucesso", rubric: rubric})
+      |> json(%{message: "Rubric created successfully", rubric: rubric_to_json(rubric)})
     end
   end
 
   # 3. (Opcional) Captura quando vier um único objeto solto (ex: {"code": "001", ...})
   def create(conn, rubric_params) when is_map(rubric_params) do
-    with {:ok, %Rubric{} = rubric} <- PayrollApi.Payroll.create_rubric(rubric_params) do
+    with {:ok, %Rubric{} = rubric} <- PayrollApi.Payroll.create_rubric(normalize_rubric_params(rubric_params)) do
       conn
       |> put_status(:created)
-      |> json(%{message: "Rubrica criada com sucesso", rubric: rubric})
+      |> json(%{message: "Rubric created successfully", rubric: rubric_to_json(rubric)})
     end
   end
 
   def update(conn, %{"id" => id} = params) do
     rubric = Payroll.get_rubric!(id)
-    rubric_params = Map.delete(params, "id")
+    rubric_params = params |> Map.delete("id") |> normalize_rubric_params()
 
     with {:ok, %Rubric{} = updated_rubric} <- Payroll.update_rubric(rubric, rubric_params) do
       conn
@@ -98,7 +97,7 @@ defmodule PayrollApiWeb.V1.RubricController do
     with {:ok, %Rubric{}} <- Payroll.delete_rubric(rubric) do
       conn
       |> put_status(:ok)
-      |> json(%{"message" => "Rubrica removida com sucesso"})
+      |> json(%{"message" => "Rubric deleted successfully"})
     end
   end
 
@@ -107,9 +106,27 @@ defmodule PayrollApiWeb.V1.RubricController do
       "id" => rubric.id,
       "code" => rubric.code,
       "description" => rubric.description,
-      "category" => rubric.category,
+      "category" => translate_category(rubric.category),
       "inserted_at" => rubric.inserted_at,
       "updated_at" => rubric.updated_at
     }
   end
+
+  defp normalize_rubric_params(%{"category" => category} = params) do
+    Map.put(params, "category", normalize_category(category))
+  end
+
+  defp normalize_rubric_params(params), do: params
+
+  defp normalize_category("earning"), do: "provento"
+  defp normalize_category("deduction"), do: "desconto"
+  defp normalize_category("charge"), do: "encargo"
+  defp normalize_category("informational"), do: "informativa"
+  defp normalize_category(category), do: category
+
+  defp translate_category("provento"), do: "earning"
+  defp translate_category("desconto"), do: "deduction"
+  defp translate_category("encargo"), do: "charge"
+  defp translate_category("informativa"), do: "informational"
+  defp translate_category(category), do: category
 end

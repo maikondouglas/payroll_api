@@ -1,6 +1,6 @@
 defmodule PayrollApiWeb.Schemas.RubricBulkUpsertResponse do
   @moduledoc """
-  Schema de resposta para importação em lote de rubricas.
+  Schema for bulk rubric import responses.
   """
 
   require OpenApiSpex
@@ -12,12 +12,12 @@ defmodule PayrollApiWeb.Schemas.RubricBulkUpsertResponse do
     properties: %{
       message: %Schema{
         type: :string,
-        description: "Mensagem de sucesso",
-        example: "12 rubricas importadas/atualizadas com sucesso!"
+        description: "Success message",
+        example: "12 rubrics imported or updated successfully"
       },
       count: %Schema{
         type: :integer,
-        description: "Quantidade de rubricas processadas",
+        description: "Number of processed rubrics",
         example: 12
       }
     },

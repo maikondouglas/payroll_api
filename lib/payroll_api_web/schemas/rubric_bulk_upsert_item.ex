@@ -1,6 +1,6 @@
 defmodule PayrollApiWeb.Schemas.RubricBulkUpsertItem do
   @moduledoc """
-  Item de rubrica para importação em lote.
+  Rubric item for bulk import.
   """
 
   require OpenApiSpex
@@ -10,13 +10,13 @@ defmodule PayrollApiWeb.Schemas.RubricBulkUpsertItem do
     title: "RubricBulkUpsertItem",
     type: :object,
     properties: %{
-      code: %Schema{type: :string, description: "Código da rubrica", example: "001"},
-      description: %Schema{type: :string, description: "Descrição da rubrica", example: "Salário Base"},
+      code: %Schema{type: :string, description: "Rubric code", example: "001"},
+      description: %Schema{type: :string, description: "Rubric description", example: "Base Salary"},
       category: %Schema{
         type: :string,
-        description: "Categoria da rubrica",
-        enum: ["provento", "desconto"],
-        example: "provento"
+        description: "Rubric category",
+        enum: ["earning", "deduction", "base", "charge", "informational"],
+        example: "earning"
       }
     },
     required: [:code, :description, :category]

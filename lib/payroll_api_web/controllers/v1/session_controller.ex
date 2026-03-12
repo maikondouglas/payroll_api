@@ -6,17 +6,17 @@ defmodule PayrollApiWeb.V1.SessionController do
   alias PayrollApi.Auth.Guardian
   alias PayrollApiWeb.Schemas.{LoginRequest, LoginResponse, ErrorResponse}
 
-  tags(["Autenticação"])
+  tags(["Authentication"])
 
   operation(:create,
-    summary: "Autenticar usuário via CPF e senha",
+    summary: "Authenticate user with CPF and password",
     description:
-      "Autentica um usuário fornecendo CPF e senha, retornando um token JWT para usar em requisições autenticadas",
-    request_body: {"Credenciais de Login", "application/json", LoginRequest},
+      "Authenticates a user using CPF and password and returns a JWT token for authenticated requests.",
+    request_body: {"Login credentials", "application/json", LoginRequest},
     responses: [
-      ok: {"Autenticação bem-sucedida", "application/json", LoginResponse},
-      unauthorized: {"Credenciais inválidas", "application/json", ErrorResponse},
-      bad_request: {"Parâmetros ausentes ou inválidos", "application/json", ErrorResponse}
+      ok: {"Authentication successful", "application/json", LoginResponse},
+      unauthorized: {"Invalid credentials", "application/json", ErrorResponse},
+      bad_request: {"Missing or invalid parameters", "application/json", ErrorResponse}
     ]
   )
 
@@ -43,7 +43,7 @@ defmodule PayrollApiWeb.V1.SessionController do
             conn
             |> put_status(:internal_server_error)
             |> json(%{
-              "error" => "Erro ao gerar token de autenticação",
+              "error" => "Failed to generate authentication token",
               "details" => inspect(reason)
             })
         end
@@ -52,13 +52,13 @@ defmodule PayrollApiWeb.V1.SessionController do
         # Retorna erro genérico para não revelar se o CPF existe ou não
         conn
         |> put_status(:unauthorized)
-        |> json(%{"error" => "CPF ou senha inválidos"})
+        |> json(%{"error" => "Invalid CPF or password"})
     end
   end
 
   def create(conn, _params) do
     conn
     |> put_status(:bad_request)
-    |> json(%{"error" => "Parâmetros obrigatórios: cpf e password"})
+    |> json(%{"error" => "Required parameters: cpf and password"})
   end
 end

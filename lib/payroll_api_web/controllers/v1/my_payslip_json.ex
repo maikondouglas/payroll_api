@@ -20,23 +20,27 @@ defmodule PayrollApiWeb.V1.MyPayslipJSON do
 
   defp data(%Payslip{} = payslip) do
     items = serialize_items(payslip)
+    base_salary = parse_decimal(payslip.base_salary)
 
-    total_vencimentos =
-      sum_by_category(items, "provento")
+    total_earnings =
+      sum_by_category(items, "earning")
 
-    total_descontos =
-      sum_by_category(items, "desconto")
+    total_deductions =
+      sum_by_category(items, "deduction")
 
-    valor_liquido = Decimal.sub(total_vencimentos, total_descontos)
+    net_amount =
+      base_salary
+      |> Decimal.add(total_earnings)
+      |> Decimal.sub(total_deductions)
 
     %{
       id: payslip.id,
       competence: payslip.competence,
-      base_salary: decimal_to_string(payslip.base_salary),
+      base_salary: decimal_to_string(base_salary),
       net_salary: decimal_to_string(payslip.net_salary),
-      total_vencimentos: decimal_to_string(total_vencimentos),
-      total_descontos: decimal_to_string(total_descontos),
-      valor_liquido: decimal_to_string(valor_liquido),
+      total_earnings: decimal_to_string(total_earnings),
+      total_deductions: decimal_to_string(total_deductions),
+      net_amount: decimal_to_string(net_amount),
       items: items,
       employee_id: payslip.employee_id,
       inserted_at: payslip.inserted_at,
@@ -57,7 +61,7 @@ defmodule PayrollApiWeb.V1.MyPayslipJSON do
         %{
           code: rubric && rubric.code,
           description: rubric && rubric.description,
-          category: rubric && rubric.category,
+          category: rubric && translate_category(rubric.category),
           reference: item.reference,
           amount: decimal_to_string(item.amount)
         }
@@ -87,7 +91,19 @@ defmodule PayrollApiWeb.V1.MyPayslipJSON do
   defp parse_decimal(%Decimal{} = value), do: value
   defp parse_decimal(_), do: Decimal.new("0")
 
-  defp decimal_to_string(%Decimal{} = value), do: Decimal.to_string(value, :normal)
+  defp translate_category("provento"), do: "earning"
+  defp translate_category("desconto"), do: "deduction"
+  defp translate_category("encargo"), do: "charge"
+  defp translate_category("informativa"), do: "informational"
+  defp translate_category(category), do: category
+
+  defp decimal_to_string(%Decimal{} = value) do
+    value
+    |> Decimal.round(2)
+    |> Decimal.to_float()
+    |> :erlang.float_to_binary(decimals: 2)
+  end
+
   defp decimal_to_string(value) when is_binary(value), do: value
   defp decimal_to_string(_), do: "0"
 end

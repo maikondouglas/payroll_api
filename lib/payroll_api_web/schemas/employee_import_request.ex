@@ -1,6 +1,6 @@
 defmodule PayrollApiWeb.Schemas.EmployeeImportRequest do
   @moduledoc """
-  Schema para upload de CSV de funcionários.
+  Schema for employee CSV uploads.
   """
 
   require OpenApiSpex
@@ -8,13 +8,13 @@ defmodule PayrollApiWeb.Schemas.EmployeeImportRequest do
 
   OpenApiSpex.schema(%{
     title: "EmployeeImportRequest",
-    description: "Arquivo CSV contendo Matrícula, Nome, Função, Admissão, CPF e Nascimento",
+    description: "CSV file containing registration, name, job title, hire date, CPF, and birth date",
     type: :object,
     properties: %{
       file: %Schema{
         type: :string,
         format: :binary,
-        description: "Arquivo CSV de funcionários"
+        description: "Employee CSV file"
       }
     },
     required: [:file]

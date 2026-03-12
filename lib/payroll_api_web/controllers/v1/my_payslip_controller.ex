@@ -9,56 +9,56 @@ defmodule PayrollApiWeb.V1.MyPayslipController do
 
   action_fallback PayrollApiWeb.FallbackController
 
-  tags(["Contracheques"])
+  tags(["Payslips"])
 
   operation(:index,
-    summary: "Listar contracheques do usuário",
+    summary: "List authenticated user payslips",
     description:
-      "Retorna todos os contracheques do usuário autenticado, ordenados por competência (mais recente primeiro)",
+      "Returns all payslips for the authenticated user, ordered by competence descending.",
     security: [%{"bearer" => []}],
     responses: [
-      ok: {"Lista de contracheques", "application/json", PayslipList},
-      unauthorized: {"Token ausente ou inválido", "application/json", ErrorResponse}
+      ok: {"Payslip list", "application/json", PayslipList},
+      unauthorized: {"Missing or invalid token", "application/json", ErrorResponse}
     ]
   )
 
   operation(:show,
-    summary: "Obter contracheque específico",
+    summary: "Get specific payslip",
     description:
-      "Retorna um contracheque específico do usuário autenticado, incluindo detalhes de rubricas",
+      "Returns a specific payslip for the authenticated user, including rubric item details.",
     security: [%{"bearer" => []}],
     parameters: [
       id: [
         in: :path,
-        description: "ID do contracheque",
+        description: "Payslip ID",
         schema: %OpenApiSpex.Schema{type: :integer},
         required: true
       ]
     ],
     responses: [
-      ok: {"Contracheque encontrado", "application/json", Payslip},
-      not_found: {"Contracheque não encontrado", "application/json", ErrorResponse},
-      unauthorized: {"Token ausente ou inválido", "application/json", ErrorResponse}
+      ok: {"Payslip found", "application/json", Payslip},
+      not_found: {"Payslip not found", "application/json", ErrorResponse},
+      unauthorized: {"Missing or invalid token", "application/json", ErrorResponse}
     ]
   )
 
   operation(:download,
-    summary: "Descarregar contracheque em PDF",
-    description: "Gera e baixa o contracheque do usuário autenticado em formato PDF",
+    summary: "Download payslip as PDF",
+    description: "Generates and downloads the authenticated user's payslip as a PDF file.",
     security: [%{"bearer" => []}],
     parameters: [
       id: [
         in: :path,
-        description: "ID do contracheque",
+        description: "Payslip ID",
         schema: %OpenApiSpex.Schema{type: :integer},
         required: true
       ]
     ],
     responses: [
-      ok: {"Arquivo PDF do contracheque", "application/pdf", nil},
-      not_found: {"Contracheque não encontrado", "application/json", ErrorResponse},
-      unauthorized: {"Token ausente ou inválido", "application/json", ErrorResponse},
-      internal_server_error: {"Erro ao gerar PDF", "application/json", ErrorResponse}
+      ok: {"Payslip PDF file", "application/pdf", nil},
+      not_found: {"Payslip not found", "application/json", ErrorResponse},
+      unauthorized: {"Missing or invalid token", "application/json", ErrorResponse},
+      internal_server_error: {"Failed to generate PDF", "application/json", ErrorResponse}
     ]
   )
 
@@ -97,7 +97,7 @@ defmodule PayrollApiWeb.V1.MyPayslipController do
   Retorna 404 se o contracheque não existir ou não pertencer ao usuário.
   Retorna 500 se houver erro na geração do PDF.
   """
-def download(conn, %{"id" => id}) do
+  def download(conn, %{"id" => id}) do
     user = Guardian.Plug.current_resource(conn)
 
     # O PdfGenerator garante os preloads necessários internamente.
@@ -110,7 +110,7 @@ def download(conn, %{"id" => id}) do
         real_pdf_bytes = Base.decode64!(base64_pdf)
 
         competence = format_competence(payslip.competence)
-        filename = "contracheque_#{String.replace(competence, ~r/[^a-zA-Z0-9_]/, "_")}.pdf"
+        filename = "payslip_#{String.replace(competence, ~r/[^a-zA-Z0-9_]/, "_")}.pdf"
 
         conn
         |> put_resp_content_type("application/pdf")
@@ -118,10 +118,10 @@ def download(conn, %{"id" => id}) do
         |> send_download({:binary, real_pdf_bytes}, filename: filename)
 
       {:ok, _} ->
-        render_error(conn, 500, "PDF gerado inválido")
+        render_error(conn, 500, "Generated PDF is invalid")
 
       {:error, reason} ->
-        render_error(conn, 500, "Erro ao gerar PDF do contracheque: #{inspect(reason)}")
+        render_error(conn, 500, "Failed to generate payslip PDF: #{inspect(reason)}")
     end
   end
 
@@ -139,25 +139,25 @@ def download(conn, %{"id" => id}) do
         "#{month_name}_#{year}"
 
       _ ->
-        "contracheque"
+        "payslip"
     end
   end
 
   defp get_month_name(month) do
     case month do
-      1 -> "janeiro"
-      2 -> "fevereiro"
-      3 -> "marco"
-      4 -> "abril"
-      5 -> "maio"
-      6 -> "junho"
-      7 -> "julho"
-      8 -> "agosto"
-      9 -> "setembro"
-      10 -> "outubro"
-      11 -> "novembro"
-      12 -> "dezembro"
-      _ -> "mes_#{month}"
+      1 -> "january"
+      2 -> "february"
+      3 -> "march"
+      4 -> "april"
+      5 -> "may"
+      6 -> "june"
+      7 -> "july"
+      8 -> "august"
+      9 -> "september"
+      10 -> "october"
+      11 -> "november"
+      12 -> "december"
+      _ -> "month_#{month}"
     end
   end
 end

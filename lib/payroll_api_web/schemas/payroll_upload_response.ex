@@ -1,34 +1,34 @@
 defmodule PayrollApiWeb.Schemas.PayrollUploadResponse do
   @moduledoc """
-  Schema para resposta de upload de folha de pagamento.
+  Schema for import endpoint responses.
   """
   require OpenApiSpex
   alias OpenApiSpex.Schema
 
   OpenApiSpex.schema(%{
     title: "PayrollUploadResponse",
-    description: "Resultado da importação de folha de pagamento",
+    description: "Import operation result",
     type: :object,
     properties: %{
       message: %Schema{
         type: :string,
-        description: "Mensagem de status",
-        example: "Importação concluída"
+        description: "Status message",
+        example: "Import completed"
       },
       success: %Schema{
         type: :integer,
-        description: "Quantidade de registros importados com sucesso",
+        description: "Number of records imported successfully",
         example: 85
       },
       errors: %Schema{
         type: :integer,
-        description: "Quantidade de erros na importação",
+        description: "Number of import errors",
         example: 2
       },
       details: %Schema{
         type: :array,
         items: PayrollApiWeb.Schemas.ImportDetail,
-        description: "Detalhes de cada registro processado",
+        description: "Details for each processed record",
         maxItems: 100
       }
     }

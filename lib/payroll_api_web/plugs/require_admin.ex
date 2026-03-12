@@ -18,7 +18,7 @@ defmodule PayrollApiWeb.Plugs.RequireAdmin do
     else
       conn
       |> put_status(:forbidden)
-      |> json(%{"error" => "Acesso negado. Apenas administradores podem acessar este recurso."})
+      |> json(%{"error" => "Access denied. Only administrators can access this resource."})
       |> halt()
     end
   end

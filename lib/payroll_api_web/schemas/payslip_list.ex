@@ -1,19 +1,19 @@
 defmodule PayrollApiWeb.Schemas.PayslipList do
   @moduledoc """
-  Schema para lista de contracheques.
+  Schema for payslip list responses.
   """
   require OpenApiSpex
   alias OpenApiSpex.Schema
 
   OpenApiSpex.schema(%{
     title: "PayslipList",
-    description: "Lista de contracheques",
+    description: "Payslip list",
     type: :object,
     properties: %{
       data: %Schema{
         type: :array,
         items: PayrollApiWeb.Schemas.Payslip,
-        description: "Array de contracheques"
+        description: "Array of payslips"
       }
     }
   })

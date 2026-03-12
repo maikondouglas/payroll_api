@@ -7,19 +7,19 @@ defmodule PayrollApiWeb.V1.PayrollController do
 
   require Logger
 
-  tags(["Folha de Pagamento"])
+  tags(["Payroll"])
 
   operation(:import,
-    summary: "Importar folha de pagamento via CSV",
+    summary: "Import payroll data from CSV",
     description:
-      "Faz upload de um arquivo CSV transacional contendo matrícula e códigos de rubricas para importar os lançamentos financeiros da folha.",
+      "Uploads a transactional CSV file containing employee registration and rubric codes to import payroll financial entries.",
     security: [%{"bearer" => []}],
-    request_body: {"Arquivo CSV", "multipart/form-data", PayrollImportRequest},
+    request_body: {"CSV file", "multipart/form-data", PayrollImportRequest},
     responses: [
-      ok: {"Importação realizada", "application/json", PayrollUploadResponse},
-      bad_request: {"Parâmetros ausentes, CSV inválido ou matrícula não encontrada", "application/json", ErrorResponse},
-      internal_server_error: {"Erro ao processar arquivo", "application/json", ErrorResponse},
-      unauthorized: {"Token ausente ou inválido", "application/json", ErrorResponse}
+      ok: {"Import completed", "application/json", PayrollUploadResponse},
+      bad_request: {"Missing parameters, invalid CSV, or unknown registration", "application/json", ErrorResponse},
+      internal_server_error: {"Failed to process file", "application/json", ErrorResponse},
+      unauthorized: {"Missing or invalid token", "application/json", ErrorResponse}
     ]
   )
 
@@ -42,24 +42,24 @@ defmodule PayrollApiWeb.V1.PayrollController do
             conn
             |> put_status(:ok)
             |> json(%{
-              "message" => "Importação concluída",
+              "message" => "Import completed",
               "success" => result.success,
               "errors" => result.errors,
               "details" => format_details(result.details)
             })
 
           {:error, reason} ->
-            Logger.error("Erro na importação: #{inspect(reason)}")
+            Logger.error("Payroll import failed: #{inspect(reason)}")
 
             conn
             |> put_status(error_status(reason))
-            |> json(%{"error" => "Erro ao processar arquivo", "details" => reason})
+            |> json(%{"error" => "Failed to process file", "details" => reason})
         end
 
       {:error, :invalid_date} ->
         conn
         |> put_status(:bad_request)
-        |> json(%{"error" => "Data de competência inválida. Use formato ISO8601 (ex: 2026-01-01)"})
+        |> json(%{"error" => "Invalid competence date. Use ISO8601 format (example: 2026-01-01)"})
     end
   end
 
@@ -67,10 +67,10 @@ defmodule PayrollApiWeb.V1.PayrollController do
     conn
     |> put_status(:bad_request)
     |> json(%{
-      "error" => "Parâmetros obrigatórios",
+      "error" => "Missing required parameters",
       "required" => %{
-        "file" => "arquivo CSV (.csv)",
-        "competence" => "data de competência (formato: YYYY-MM-DD)"
+        "file" => "CSV file (.csv)",
+        "competence" => "payroll competence date (format: YYYY-MM-DD)"
       }
     })
   end
