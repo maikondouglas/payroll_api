@@ -12,6 +12,7 @@ defmodule PayrollApiWeb.V1.SessionController do
     summary: "Authenticate user with CPF and password",
     description:
       "Authenticates a user using CPF and password and returns a JWT token for authenticated requests.",
+    security: [],
     request_body: {"Login credentials", "application/json", LoginRequest},
     responses: [
       ok: {"Authentication successful", "application/json", LoginResponse},

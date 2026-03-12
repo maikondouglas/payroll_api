@@ -22,6 +22,7 @@ defmodule PayrollApiWeb.Router do
 
     # Rotas públicas
     post "/login", SessionController, :create
+    get "/news", NewsController, :index
 
     # Rotas protegidas
     scope "/" do
@@ -41,6 +42,7 @@ defmodule PayrollApiWeb.Router do
     scope "/" do
       pipe_through [:auth, :admin]
 
+      resources "/announcements", AnnouncementController, except: [:new, :edit]
       resources "/rubrics", RubricController, except: [:new, :edit]
     end
   end
