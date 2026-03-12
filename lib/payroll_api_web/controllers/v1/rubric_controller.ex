@@ -1,10 +1,27 @@
 defmodule PayrollApiWeb.V1.RubricController do
   use PayrollApiWeb, :controller
+  use OpenApiSpex.ControllerSpecs
 
   alias PayrollApi.Payroll
   alias PayrollApi.Payroll.Rubric
+  alias PayrollApiWeb.Schemas.{ErrorResponse, RubricBulkUpsertRequest, RubricBulkUpsertResponse}
 
   action_fallback PayrollApiWeb.FallbackController
+
+  tags(["Rubricas"])
+
+  operation(:create,
+    summary: "Criar ou atualizar rubricas em lote",
+    description:
+      "Recebe um array JSON de rubricas e executa criação/atualização em lote usando o código como chave de conflito.",
+    security: [%{"bearer" => []}],
+    request_body: {"Lista de rubricas", "application/json", RubricBulkUpsertRequest},
+    responses: [
+      created: {"Rubricas importadas", "application/json", RubricBulkUpsertResponse},
+      bad_request: {"Payload inválido ou falha de importação", "application/json", ErrorResponse},
+      unauthorized: {"Token ausente ou inválido", "application/json", ErrorResponse}
+    ]
+  )
 
   def index(conn, _params) do
     rubrics = Payroll.list_rubrics()
@@ -36,7 +53,7 @@ defmodule PayrollApiWeb.V1.RubricController do
       {count, nil} ->
         conn
         |> put_status(:created)
-        |> json(%{message: "#{count} rubricas importadas/atualizadas com sucesso!"})
+        |> json(%{message: "#{count} rubricas importadas/atualizadas com sucesso!", count: count})
 
       {:error, reason} ->
         conn

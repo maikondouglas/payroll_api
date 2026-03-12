@@ -16,8 +16,13 @@ defmodule PayrollApiWeb.Schemas.ErrorResponse do
         example: "CPF ou senha inválidos"
       },
       details: %Schema{
-        type: :string,
-        description: "Detalhes adicionais do erro (opcional)"
+        description: "Detalhes adicionais do erro (opcional)",
+        nullable: true,
+        oneOf: [
+          %Schema{type: :string, example: "Cabeçalho CSV inválido"},
+          %Schema{type: :object, additionalProperties: true},
+          %Schema{type: :array, items: %Schema{type: :object, additionalProperties: true}}
+        ]
       }
     },
     required: [:error]

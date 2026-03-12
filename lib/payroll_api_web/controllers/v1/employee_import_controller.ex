@@ -3,7 +3,7 @@ defmodule PayrollApiWeb.V1.EmployeeImportController do
   use OpenApiSpex.ControllerSpecs
 
   alias PayrollApi.HR.EmployeeImporter
-  alias PayrollApiWeb.Schemas.{ErrorResponse, PayrollUploadResponse}
+  alias PayrollApiWeb.Schemas.{EmployeeImportRequest, ErrorResponse, PayrollUploadResponse}
 
   require Logger
 
@@ -11,12 +11,13 @@ defmodule PayrollApiWeb.V1.EmployeeImportController do
 
   operation(:import,
     summary: "Importar funcionarios via CSV",
-    description: "Faz upload de um CSV de RH para cadastrar/atualizar funcionarios",
+    description:
+      "Faz upload de um CSV de RH para cadastrar ou atualizar funcionários a partir de Matrícula, Nome, Função, Admissão, CPF e Nascimento.",
     security: [%{"bearer" => []}],
-    request_body: {"Arquivo CSV", "multipart/form-data", PayrollApiWeb.Schemas.PayrollUploadRequest},
+    request_body: {"Arquivo CSV", "multipart/form-data", EmployeeImportRequest},
     responses: [
       ok: {"Importacao realizada", "application/json", PayrollUploadResponse},
-      bad_request: {"Parametros ausentes ou invalidos", "application/json", ErrorResponse},
+      bad_request: {"Parametros ausentes, cabeçalho inválido ou CSV malformado", "application/json", ErrorResponse},
       internal_server_error: {"Erro ao processar arquivo", "application/json", ErrorResponse},
       unauthorized: {"Token ausente ou invalido", "application/json", ErrorResponse}
     ]
@@ -38,7 +39,7 @@ defmodule PayrollApiWeb.V1.EmployeeImportController do
         Logger.error("Erro na importacao de funcionarios: #{inspect(reason)}")
 
         conn
-        |> put_status(:internal_server_error)
+        |> put_status(error_status(reason))
         |> json(%{"error" => "Erro ao processar arquivo", "details" => reason})
     end
   end
@@ -57,4 +58,7 @@ defmodule PayrollApiWeb.V1.EmployeeImportController do
       {:error, data} -> %{"status" => "error", "data" => data}
     end)
   end
+
+  defp error_status(%{type: "ConnectionError"}), do: :internal_server_error
+  defp error_status(_reason), do: :bad_request
 end
