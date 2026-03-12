@@ -8,7 +8,7 @@ defmodule PayrollApiWeb.V1.RubricController do
 
   action_fallback PayrollApiWeb.FallbackController
 
-  tags(["Rubrics"])
+  tags(["Admin - Rubrics"])
 
   operation(:create,
     summary: "Create or update rubrics in bulk",

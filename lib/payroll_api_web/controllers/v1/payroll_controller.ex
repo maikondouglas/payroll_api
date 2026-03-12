@@ -7,7 +7,7 @@ defmodule PayrollApiWeb.V1.PayrollController do
 
   require Logger
 
-  tags(["Payroll"])
+  tags(["Admin - Payroll"])
 
   operation(:import,
     summary: "Import payroll data from CSV",

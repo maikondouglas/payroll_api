@@ -12,7 +12,7 @@ defmodule PayrollApiWeb.Router do
     plug PayrollApi.Auth.Pipeline
   end
 
-  pipeline :admin do
+  pipeline :admin_auth do
     plug PayrollApiWeb.Plugs.RequireAdmin
   end
 
@@ -24,14 +24,11 @@ defmodule PayrollApiWeb.Router do
     post "/login", SessionController, :create
     get "/news", NewsController, :index
 
-    # Rotas protegidas
+    # Rotas protegidas (usuário autenticado)
     scope "/" do
       pipe_through :auth
 
       get "/me", UserController, :me
-      post "/hr/employees/import", EmployeeImportController, :import
-      post "/payroll/import", PayrollController, :import
-      post "/payroll/upload", PayrollController, :upload
 
       # Contracheques do colaborador
       get "/my-payslips", MyPayslipController, :index
@@ -39,11 +36,16 @@ defmodule PayrollApiWeb.Router do
       get "/my-payslips/:id/download", MyPayslipController, :download
     end
 
-    scope "/" do
-      pipe_through [:auth, :admin]
+    # Rotas administrativas
+    scope "/admin" do
+      pipe_through [:auth, :admin_auth]
 
-      resources "/announcements", AnnouncementController, except: [:new, :edit]
+      post "/hr/employees/import", EmployeeImportController, :import
+      post "/payroll/import", PayrollController, :import
+      post "/payroll/upload", PayrollController, :upload
+
       resources "/rubrics", RubricController, except: [:new, :edit]
+      resources "/announcements", AnnouncementController, except: [:new, :edit]
     end
   end
 

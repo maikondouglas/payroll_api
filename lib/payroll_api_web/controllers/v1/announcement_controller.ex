@@ -16,7 +16,7 @@ defmodule PayrollApiWeb.V1.AnnouncementController do
 
   action_fallback PayrollApiWeb.FallbackController
 
-  tags(["Announcements"])
+  tags(["Admin - Announcements"])
 
   operation(:index,
     summary: "List announcements",

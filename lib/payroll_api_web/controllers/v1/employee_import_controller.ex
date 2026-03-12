@@ -7,7 +7,7 @@ defmodule PayrollApiWeb.V1.EmployeeImportController do
 
   require Logger
 
-  tags(["HR"])
+  tags(["Admin - HR"])
 
   operation(:import,
     summary: "Import employees from CSV",
