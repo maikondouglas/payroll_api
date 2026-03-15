@@ -25,19 +25,11 @@ defmodule PayrollApiWeb.V1.UserController do
   O token JWT deve ser enviado no header Authorization: Bearer <token>
   """
   def me(conn, _params) do
-    # O Guardian.Plug.LoadResource (configurado no Pipeline)
-    # busca o usuário no banco automaticamente e armazena na conexão.
-    # Recuperamos o usuário autenticado usando current_resource/1:
     user = PayrollApi.Auth.Guardian.Plug.current_resource(conn)
 
     conn
     |> put_status(:ok)
-    |> json(%{
-      "id" => user.id,
-      "name" => user.name,
-      "cpf" => user.cpf,
-      "role" => user.role
-    })
+    |> render(:me, user: user)
   end
 
   def index(conn, _params) do

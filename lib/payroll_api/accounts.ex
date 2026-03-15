@@ -38,6 +38,17 @@ defmodule PayrollApi.Accounts do
   def get_user!(id), do: Repo.get!(User, id)
 
   @doc """
+  Gets a single user with the employee association preloaded.
+
+  Raises `Ecto.NoResultsError` if the User does not exist.
+  """
+  def get_user_with_employee!(id) do
+    id
+    |> get_user!()
+    |> Repo.preload(:employee)
+  end
+
+  @doc """
   Gets a single user by CPF.
 
   Returns nil if the User does not exist.

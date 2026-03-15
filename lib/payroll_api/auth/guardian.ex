@@ -21,7 +21,7 @@ defmodule PayrollApi.Auth.Guardian do
   """
   def resource_from_claims(claims) do
     id = claims["sub"]
-    resource = Accounts.get_user!(id)
+    resource = Accounts.get_user_with_employee!(id)
     {:ok, resource}
   rescue
     Ecto.NoResultsError ->
