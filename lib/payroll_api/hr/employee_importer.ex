@@ -14,6 +14,7 @@ defmodule PayrollApi.HR.EmployeeImporter do
   alias NimbleCSV.RFC4180
   alias PayrollApi.Accounts.User
   alias PayrollApi.HR.Employee
+  alias PayrollApi.Organizations
   alias PayrollApi.Repo
 
   @default_password "Mudar123!"
@@ -30,8 +31,16 @@ defmodule PayrollApi.HR.EmployeeImporter do
       {:error, _step, reason, _changes} -> {:error, reason}
     end
   rescue
-    _e in File.Error -> {:error, "Arquivo CSV nao encontrado ou inacessivel"}
-    e -> {:error, %{message: "Erro ao importar funcionarios", exception: Exception.message(e), type: e.__struct__ |> Module.split() |> List.last()}}
+    _e in File.Error ->
+      {:error, "Arquivo CSV nao encontrado ou inacessivel"}
+
+    e ->
+      {:error,
+       %{
+         message: "Erro ao importar funcionarios",
+         exception: Exception.message(e),
+         type: e.__struct__ |> Module.split() |> List.last()
+       }}
   end
 
   defp read_csv(file_path) do
@@ -90,10 +99,12 @@ defmodule PayrollApi.HR.EmployeeImporter do
       cpf: find_column(normalized, ["cpf"]),
       funcao: find_column(normalized, ["funcao", "cargo"]),
       admissao: find_column(normalized, ["admissao"]),
-      nascimento: find_column(normalized, ["nascimento"])
+      nascimento: find_column(normalized, ["nascimento"]),
+      company: find_column(normalized, ["empresa", "company"]),
+      department: find_column(normalized, ["setor", "departamento", "department"])
     }
 
-    if col_map.matricula && col_map.nome && col_map.cpf do
+    if col_map.matricula && col_map.nome && col_map.cpf && col_map.company && col_map.department do
       {:ok, col_map}
     else
       :error
@@ -107,7 +118,8 @@ defmodule PayrollApi.HR.EmployeeImporter do
   defp import_rows(repo, _headers, rows, col_map, header_line) do
     rows
     |> Enum.with_index(header_line + 1)
-    |> Enum.reduce_while({:ok, %{success: 0, errors: 0, details: []}}, fn {row, line_number}, {:ok, acc} ->
+    |> Enum.reduce_while({:ok, %{success: 0, errors: 0, details: []}}, fn {row, line_number},
+                                                                          {:ok, acc} ->
       if blank_row?(row) do
         {:cont, {:ok, acc}}
       else
@@ -131,11 +143,15 @@ defmodule PayrollApi.HR.EmployeeImporter do
     with {:ok, registration} <- extract_required(row, col_map.matricula, "Matricula"),
          {:ok, name} <- extract_required(row, col_map.nome, "Nome"),
          {:ok, cpf} <- extract_cpf(row, col_map.cpf),
+         {:ok, company_name} <- extract_required(row, col_map.company, "Empresa"),
+         {:ok, department_name} <- extract_required(row, col_map.department, "Setor"),
+         {:ok, department} <- find_or_create_department(company_name, department_name),
          {:ok, employee} <-
            find_or_create_or_update_employee(repo, %{
              registration: registration,
              name: name,
              cpf: cpf,
+             department_id: department.id,
              job_title: extract_optional(row, col_map.funcao),
              admission_date: parse_date(extract_optional(row, col_map.admissao)),
              birth_date: parse_date(extract_optional(row, col_map.nascimento))
@@ -147,13 +163,19 @@ defmodule PayrollApi.HR.EmployeeImporter do
          registration: employee.registration,
          cpf: cpf,
          name: name,
+         company: company_name,
+         department: department_name,
          job_title: employee.job_title,
          admission_date: employee.admission_date,
          birth_date: employee.birth_date
        }}
     else
       {:error, %Ecto.Changeset{} = changeset} ->
-        {:error, %{message: "Falha ao salvar funcionario na linha #{line_number}", details: format_changeset_errors(changeset)}}
+        {:error,
+         %{
+           message: "Falha ao salvar funcionario na linha #{line_number}",
+           details: format_changeset_errors(changeset)
+         }}
 
       {:error, reason} ->
         {:error, reason}
@@ -204,6 +226,7 @@ defmodule PayrollApi.HR.EmployeeImporter do
       %{
         user_id: user_id,
         registration: data.registration,
+        department_id: data.department_id,
         job_title: blank_to_default(data.job_title, "Nao informado")
       }
       |> maybe_put_employee_date(:admission_date, data.admission_date)
@@ -249,6 +272,7 @@ defmodule PayrollApi.HR.EmployeeImporter do
     attrs =
       %{
         registration: data.registration,
+        department_id: data.department_id,
         job_title: blank_to_default(data.job_title, "Nao informado")
       }
       |> maybe_put_employee_date(:admission_date, data.admission_date)
@@ -275,7 +299,10 @@ defmodule PayrollApi.HR.EmployeeImporter do
   defp extract_cpf(row, index) do
     with {:ok, raw_cpf} <- extract_required(row, index, "CPF") do
       cleaned = String.replace(raw_cpf, ~r/\D/u, "")
-      if String.length(cleaned) == 11, do: {:ok, cleaned}, else: {:error, "CPF invalido: #{raw_cpf}"}
+
+      if String.length(cleaned) == 11,
+        do: {:ok, cleaned},
+        else: {:error, "CPF invalido: #{raw_cpf}"}
     end
   end
 
@@ -325,12 +352,23 @@ defmodule PayrollApi.HR.EmployeeImporter do
     |> String.trim()
   end
 
+  defp find_or_create_department(company_name, department_name) do
+    company_attrs = %{is_active: true}
+
+    case Organizations.find_or_create_department(company_name, department_name, company_attrs) do
+      {:ok, department} -> {:ok, department}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
   defp blank_row?(row) do
     Enum.all?(row, fn col -> col |> to_string() |> String.trim() |> Kernel.==("") end)
   end
 
   defp blank_to_default(nil, default), do: default
-  defp blank_to_default(value, default), do: if(String.trim(value) == "", do: default, else: String.trim(value))
+
+  defp blank_to_default(value, default),
+    do: if(String.trim(value) == "", do: default, else: String.trim(value))
 
   defp format_changeset_errors(changeset) do
     Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->

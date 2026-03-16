@@ -12,7 +12,12 @@ defmodule PayrollApiWeb.Schemas.MeResponse do
     properties: %{
       id: %Schema{type: :integer, description: "User ID", example: 1},
       name: %Schema{type: :string, description: "User name", example: "Joao Silva"},
-      email: %Schema{type: :string, format: :email, description: "User email", example: "joao@empresa.com"},
+      email: %Schema{
+        type: :string,
+        format: :email,
+        description: "User email",
+        example: "joao@empresa.com"
+      },
       cpf: %Schema{type: :string, description: "User CPF", example: "12345678901"},
       role: %Schema{
         type: :string,
@@ -49,9 +54,21 @@ defmodule PayrollApiWeb.Schemas.MeResponse do
             nullable: true,
             description: "Employee birth date",
             example: "1992-08-15"
+          },
+          department: %Schema{
+            type: :string,
+            nullable: true,
+            description: "Department name",
+            example: "Technology"
+          },
+          company: %Schema{
+            type: :string,
+            nullable: true,
+            description: "Company name",
+            example: "Acme Corp"
           }
         },
-        required: [:registration, :job_title, :admission_date, :birth_date]
+        required: [:registration, :job_title, :admission_date, :birth_date, :department, :company]
       }
     },
     required: [:id, :name, :email, :cpf, :role, :employee_profile]

@@ -49,7 +49,9 @@ defmodule PayrollApiWeb.V1.UserJSON do
       registration: employee.registration,
       job_title: employee.job_title,
       admission_date: format_date(employee.admission_date),
-      birth_date: format_date(employee.birth_date)
+      birth_date: format_date(employee.birth_date),
+      department: department_name(employee.department),
+      company: company_name(employee.department)
     }
   end
 
@@ -58,9 +60,17 @@ defmodule PayrollApiWeb.V1.UserJSON do
       registration: nil,
       job_title: nil,
       admission_date: nil,
-      birth_date: nil
+      birth_date: nil,
+      department: nil,
+      company: nil
     }
   end
+
+  defp department_name(%{name: name}), do: name
+  defp department_name(_department), do: nil
+
+  defp company_name(%{company: %{name: name}}), do: name
+  defp company_name(_department), do: nil
 
   defp format_date(%Date{} = date), do: Date.to_iso8601(date)
   defp format_date(_date), do: nil

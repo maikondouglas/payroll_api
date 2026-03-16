@@ -12,12 +12,14 @@ defmodule PayrollApiWeb.V1.EmployeeImportController do
   operation(:import,
     summary: "Import employees from CSV",
     description:
-      "Uploads an HR CSV file to create or update employees using registration, name, job title, hire date, CPF, and birth date.",
+      "Uploads an HR CSV file to create or update employees using registration, name, CPF, company, department, job title, hire date, and birth date.",
     security: [%{"bearer" => []}],
     request_body: {"CSV file", "multipart/form-data", EmployeeImportRequest},
     responses: [
       ok: {"Import completed", "application/json", PayrollUploadResponse},
-      bad_request: {"Missing parameters, invalid header, or malformed CSV", "application/json", ErrorResponse},
+      bad_request:
+        {"Missing parameters, invalid header, or malformed CSV", "application/json",
+         ErrorResponse},
       internal_server_error: {"Failed to process file", "application/json", ErrorResponse},
       unauthorized: {"Missing or invalid token", "application/json", ErrorResponse}
     ]

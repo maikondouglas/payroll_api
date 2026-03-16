@@ -45,7 +45,7 @@ defmodule PayrollApi.Accounts do
   def get_user_with_employee!(id) do
     id
     |> get_user!()
-    |> Repo.preload(:employee)
+    |> Repo.preload(employee: [department: [:company]])
   end
 
   @doc """

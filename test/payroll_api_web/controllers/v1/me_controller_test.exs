@@ -4,10 +4,12 @@ defmodule PayrollApiWeb.V1.MeControllerTest do
   alias PayrollApi.Accounts
   alias PayrollApi.Auth.Guardian
   alias PayrollApi.HR
+  alias PayrollApi.Organizations
 
   describe "GET /api/v1/me" do
     test "returns the authenticated user profile with employee data", %{conn: conn} do
       user = create_user(%{role: "employee"})
+      department = create_department("Acme Corp", "Engineering")
 
       {:ok, _employee} =
         HR.create_employee(%{
@@ -15,6 +17,7 @@ defmodule PayrollApiWeb.V1.MeControllerTest do
           job_title: "Backend Engineer",
           admission_date: ~D[2024-02-01],
           birth_date: ~D[1990-07-15],
+          department_id: department.id,
           user_id: user.id
         })
 
@@ -31,7 +34,9 @@ defmodule PayrollApiWeb.V1.MeControllerTest do
                  "registration" => "REG-1001",
                  "job_title" => "Backend Engineer",
                  "admission_date" => "2024-02-01",
-                 "birth_date" => "1990-07-15"
+                 "birth_date" => "1990-07-15",
+                 "department" => "Engineering",
+                 "company" => "Acme Corp"
                }
              } = json_response(conn, 200)
 
@@ -41,7 +46,9 @@ defmodule PayrollApiWeb.V1.MeControllerTest do
       assert user_cpf == user.cpf
     end
 
-    test "returns null employee fields when authenticated user has no employee profile", %{conn: conn} do
+    test "returns null employee fields when authenticated user has no employee profile", %{
+      conn: conn
+    } do
       user =
         create_user(%{
           role: "admin",
@@ -63,7 +70,9 @@ defmodule PayrollApiWeb.V1.MeControllerTest do
                  "registration" => nil,
                  "job_title" => nil,
                  "admission_date" => nil,
-                 "birth_date" => nil
+                 "birth_date" => nil,
+                 "department" => nil,
+                 "company" => nil
                }
              } = json_response(conn, 200)
 
@@ -110,5 +119,10 @@ defmodule PayrollApiWeb.V1.MeControllerTest do
     suffix = Integer.to_string(rem(unique, 100_000)) |> String.pad_leading(5, "0")
     base = String.slice(cpf, 0, 6)
     %{attrs | cpf: base <> suffix}
+  end
+
+  defp create_department(company_name, department_name) do
+    {:ok, department} = Organizations.find_or_create_department(company_name, department_name)
+    department
   end
 end

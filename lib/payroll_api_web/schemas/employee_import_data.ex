@@ -15,11 +15,23 @@ defmodule PayrollApiWeb.Schemas.EmployeeImportData do
       registration: %Schema{type: :string, description: "Employee registration", example: "12345"},
       name: %Schema{type: :string, description: "Employee name", example: "John Doe"},
       cpf: %Schema{type: :string, description: "Employee CPF", example: "00011122233"},
+      company: %Schema{type: :string, description: "Company name", example: "Acme Corp"},
+      department: %Schema{type: :string, description: "Department name", example: "Technology"},
       job_title: %Schema{type: :string, description: "Employee job title", example: "Nurse"},
-      admission_date: %Schema{type: :string, format: :date, description: "Admission date", example: "2026-01-15"},
-      birth_date: %Schema{type: :string, format: :date, description: "Birth date", example: "1990-03-20"}
+      admission_date: %Schema{
+        type: :string,
+        format: :date,
+        description: "Admission date",
+        example: "2026-01-15"
+      },
+      birth_date: %Schema{
+        type: :string,
+        format: :date,
+        description: "Birth date",
+        example: "1990-03-20"
+      }
     },
-    required: [:line, :employee_id, :registration, :name, :cpf, :job_title],
+    required: [:line, :employee_id, :registration, :name, :cpf, :company, :department, :job_title],
     additionalProperties: true
   })
 end

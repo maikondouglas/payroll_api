@@ -10,6 +10,7 @@ defmodule PayrollApi.HR.Employee do
   import Ecto.Changeset
 
   alias PayrollApi.Accounts.User
+  alias PayrollApi.Organizations.Department
   alias PayrollApi.Payroll.Payslip
 
   schema "employees" do
@@ -19,6 +20,7 @@ defmodule PayrollApi.HR.Employee do
     field :birth_date, :date
 
     belongs_to :user, User
+    belongs_to :department, Department
     has_many :payslips, Payslip, foreign_key: :employee_id, on_delete: :delete_all
 
     timestamps(type: :utc_datetime)
@@ -29,15 +31,23 @@ defmodule PayrollApi.HR.Employee do
   """
   def changeset(employee, attrs) do
     employee
-    |> cast(attrs, [:registration, :job_title, :admission_date, :birth_date, :user_id])
+    |> cast(attrs, [
+      :registration,
+      :job_title,
+      :admission_date,
+      :birth_date,
+      :user_id,
+      :department_id
+    ])
     |> cast_assoc(:user, with: &user_sync_changeset/2)
-    |> validate_required([:registration, :job_title, :admission_date, :birth_date])
+    |> validate_required([:registration, :job_title, :admission_date, :birth_date, :department_id])
     |> validate_user_reference()
     |> validate_length(:registration, min: 1, max: 20)
     |> validate_length(:job_title, min: 1, max: 100)
     |> unique_constraint(:registration, message: "matrícula já está em uso")
     |> unique_constraint(:user_id, message: "usuário já foi vinculado a outro funcionário")
     |> foreign_key_constraint(:user_id, message: "usuário não existe")
+    |> foreign_key_constraint(:department_id, message: "departamento não existe")
   end
 
   defp validate_user_reference(changeset) do
