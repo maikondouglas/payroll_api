@@ -11,13 +11,19 @@
 # and so on) as they will fail if something goes wrong.
 
 alias PayrollApi.Accounts
+alias PayrollApi.Organizations
 
-Accounts.create_user(%{
-  name: "Admin Master",
-  # Guardamos o e-mail para comunicação
-  email: "admin@payroll.com",
-  # Usaremos o CPF para o login na API
-  cpf: "00011122233",
-  password: "password123",
-  role: "admin"
-})
+case Accounts.create_user(%{
+       name: "Admin Master",
+       # Guardamos o e-mail para comunicação
+       email: "admin@payroll.com",
+       # Usaremos o CPF para o login na API
+       cpf: "00011122233",
+       password: "password123",
+       role: "admin"
+     }) do
+  {:ok, _user} -> :ok
+  {:error, _changeset} -> :ok
+end
+
+{:ok, _department} = Organizations.find_or_create_department("Main Office", "Main Office")

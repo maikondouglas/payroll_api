@@ -9,7 +9,16 @@ NimbleCSV.define(CSVSemicolon, separator: ";", escape: "\"")
 defmodule SplitCSV do
   alias NimbleCSV.RFC4180
 
-  @employees_header ["matricula", "nome", "funcao", "admissao", "cpf", "nascimento"]
+  @employees_header [
+    "matricula",
+    "nome",
+    "empresa",
+    "setor",
+    "funcao",
+    "admissao",
+    "cpf",
+    "nascimento"
+  ]
 
   def run([input_path]) do
     with {:ok, {headers, rows}} <- read_csv(input_path),
@@ -23,7 +32,10 @@ defmodule SplitCSV do
       payroll_path = Path.join(base_dir, "payroll.csv")
 
       write_csv(employees_path, [@employees_header | employees_rows])
-      write_csv(payroll_path, [["matricula" | Enum.map(financial_columns, &elem(&1, 0))] | payroll_rows])
+
+      write_csv(payroll_path, [
+        ["matricula" | Enum.map(financial_columns, &elem(&1, 0))] | payroll_rows
+      ])
 
       IO.puts("OK: employees.csv gerado em #{employees_path} (#{length(employees_rows)} linhas)")
       IO.puts("OK: payroll.csv gerado em #{payroll_path} (#{length(payroll_rows)} linhas)")
@@ -87,18 +99,23 @@ defmodule SplitCSV do
     indexes = %{
       matricula: find_column(normalized, ["matr"]),
       nome: find_column(normalized, ["nome"]),
+      empresa: find_column(normalized, ["empresa"]) || find_column(normalized, ["company"]),
+      setor:
+        find_column(normalized, ["setor"]) || find_column(normalized, ["departamento"]) ||
+          find_column(normalized, ["department"]),
       funcao: find_column(normalized, ["funcao"]) || find_column(normalized, ["cargo"]),
       admissao: find_column(normalized, ["admissao"]),
       cpf: find_column(normalized, ["cpf"]),
       nascimento: find_column(normalized, ["nascimento"])
     }
 
-    required = [:matricula, :nome, :cpf]
+    required = [:matricula, :nome, :cpf, :empresa, :setor]
 
     if Enum.all?(required, &(Map.get(indexes, &1) != nil)) do
       {:ok, indexes}
     else
-      {:error, "Nao foi possivel localizar as colunas minimas de dados mestres (matricula, nome, cpf)"}
+      {:error,
+       "Nao foi possivel localizar as colunas minimas de dados mestres (matricula, nome, cpf, empresa, setor/departamento)"}
     end
   end
 
@@ -133,6 +150,8 @@ defmodule SplitCSV do
       [
         at(row, indexes.matricula),
         at(row, indexes.nome),
+        at(row, indexes.empresa),
+        at(row, indexes.setor),
         at(row, indexes.funcao),
         at(row, indexes.admissao),
         at(row, indexes.cpf),
@@ -185,7 +204,8 @@ defmodule SplitCSV do
     has_comma = String.contains?(value, ",")
 
     cond do
-      value == "" -> "0"
+      value == "" ->
+        "0"
 
       has_dot and has_comma ->
         if last_separator_index(value, ",") > last_separator_index(value, ".") do
@@ -200,13 +220,16 @@ defmodule SplitCSV do
           _ -> String.replace(value, ",", ".")
         end
 
-      true -> value
+      true ->
+        value
     end
   end
 
   defp last_separator_index(value, separator) do
     case :binary.matches(value, separator) do
-      [] -> -1
+      [] ->
+        -1
+
       matches ->
         {index, _len} = List.last(matches)
         index

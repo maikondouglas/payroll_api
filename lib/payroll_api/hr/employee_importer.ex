@@ -118,34 +118,40 @@ defmodule PayrollApi.HR.EmployeeImporter do
   defp import_rows(repo, _headers, rows, col_map, header_line) do
     rows
     |> Enum.with_index(header_line + 1)
-    |> Enum.reduce_while({:ok, %{success: 0, errors: 0, details: []}}, fn {row, line_number},
-                                                                          {:ok, acc} ->
-      if blank_row?(row) do
-        {:cont, {:ok, acc}}
-      else
-        case import_row(repo, row, col_map, line_number) do
-          {:ok, detail} ->
-            next = %{acc | success: acc.success + 1, details: [{:ok, detail} | acc.details]}
-            {:cont, {:ok, next}}
+    |> Enum.reduce_while(
+      {:ok, %{success: 0, errors: 0, details: [], organization_cache: %{}}},
+      fn {row, line_number}, {:ok, acc} ->
+        if blank_row?(row) do
+          {:cont, {:ok, acc}}
+        else
+          case import_row(repo, row, col_map, line_number, acc.organization_cache) do
+            {:ok, detail, organization_cache} ->
+              next = %{acc | success: acc.success + 1, details: [{:ok, detail} | acc.details]}
+              {:cont, {:ok, %{next | organization_cache: organization_cache}}}
 
-          {:error, reason} ->
-            {:halt, {:error, %{line: line_number, reason: reason}}}
+            {:error, reason} ->
+              {:halt, {:error, %{line: line_number, reason: reason}}}
+          end
         end
       end
-    end)
+    )
     |> case do
-      {:ok, result} -> {:ok, %{result | details: Enum.reverse(result.details)}}
-      error -> error
+      {:ok, result} ->
+        {:ok, result |> Map.update!(:details, &Enum.reverse/1) |> Map.delete(:organization_cache)}
+
+      error ->
+        error
     end
   end
 
-  defp import_row(repo, row, col_map, line_number) do
+  defp import_row(repo, row, col_map, line_number, organization_cache) do
     with {:ok, registration} <- extract_required(row, col_map.matricula, "Matricula"),
          {:ok, name} <- extract_required(row, col_map.nome, "Nome"),
          {:ok, cpf} <- extract_cpf(row, col_map.cpf),
          {:ok, company_name} <- extract_required(row, col_map.company, "Empresa"),
          {:ok, department_name} <- extract_required(row, col_map.department, "Setor"),
-         {:ok, department} <- find_or_create_department(company_name, department_name),
+         {:ok, department, organization_cache} <-
+           find_or_create_department(company_name, department_name, organization_cache),
          {:ok, employee} <-
            find_or_create_or_update_employee(repo, %{
              registration: registration,
@@ -168,7 +174,7 @@ defmodule PayrollApi.HR.EmployeeImporter do
          job_title: employee.job_title,
          admission_date: employee.admission_date,
          birth_date: employee.birth_date
-       }}
+       }, organization_cache}
     else
       {:error, %Ecto.Changeset{} = changeset} ->
         {:error,
@@ -352,12 +358,29 @@ defmodule PayrollApi.HR.EmployeeImporter do
     |> String.trim()
   end
 
-  defp find_or_create_department(company_name, department_name) do
-    company_attrs = %{is_active: true}
+  defp find_or_create_department(company_name, department_name, organization_cache) do
+    normalized_company_name = String.trim(company_name)
+    normalized_department_name = String.trim(department_name)
+    cache_key = {normalized_company_name, normalized_department_name}
 
-    case Organizations.find_or_create_department(company_name, department_name, company_attrs) do
-      {:ok, department} -> {:ok, department}
-      {:error, reason} -> {:error, reason}
+    case Map.get(organization_cache, cache_key) do
+      nil ->
+        company_attrs = %{is_active: true}
+
+        case Organizations.find_or_create_department(
+               normalized_company_name,
+               normalized_department_name,
+               company_attrs
+             ) do
+          {:ok, department} ->
+            {:ok, department, Map.put(organization_cache, cache_key, department)}
+
+          {:error, reason} ->
+            {:error, reason}
+        end
+
+      department ->
+        {:ok, department, organization_cache}
     end
   end
 
