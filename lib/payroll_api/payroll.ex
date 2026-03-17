@@ -73,6 +73,7 @@ defmodule PayrollApi.Payroll do
     |> preload([_p, e], employee: e)
     |> Repo.all()
     |> Repo.preload(payslip_items: :rubric)
+    |> Repo.preload(employee: [:user, department: :company])
   end
 
   @doc """
@@ -100,6 +101,7 @@ defmodule PayrollApi.Payroll do
     |> preload([_p, e], employee: e)
     |> Repo.one!()
     |> Repo.preload(payslip_items: :rubric)
+    |> Repo.preload(employee: [:user, department: :company])
   end
 
   @doc """
@@ -199,7 +201,7 @@ defmodule PayrollApi.Payroll do
     |> Repo.insert()
   end
 
- @doc """
+  @doc """
   Insere ou atualiza uma lista de rubricas em lote.
   """
   def create_rubrics_in_bulk(rubrics_params) do

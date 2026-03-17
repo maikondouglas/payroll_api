@@ -18,11 +18,15 @@ defmodule PayrollApi.Payroll.PdfGenerator do
   ou `{:error, reason}` em caso de erro.
 
   O próprio generator garante os preloads necessários:
-  - `employee: :user`
+  - `employee: [:user, department: :company]`
   - `payslip_items: :rubric`
   """
   def generate(%Payslip{} = payslip) do
-    payslip = Repo.preload(payslip, [employee: :user, payslip_items: :rubric])
+    payslip =
+      Repo.preload(payslip,
+        employee: [:user, department: :company],
+        payslip_items: :rubric
+      )
 
     {earnings, deductions, footer_items} = split_items_by_category(payslip.payslip_items)
 
@@ -85,222 +89,342 @@ defmodule PayrollApi.Payroll.PdfGenerator do
        ) do
     employee = payslip.employee
     user = employee.user
+    department = employee.department
+    company = if department, do: department.company, else: nil
     competence = format_competence(payslip.competence)
 
     """
     <!DOCTYPE html>
-    <html lang="en">
+    <html lang="pt-BR">
     <head>
         <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Payslip - #{competence}</title>
+        <title>Holerite - #{competence}</title>
         <style>
-          @page {
-            size: A4;
-            margin: 14mm 12mm;
+          @page { size: A4; margin: 12mm 14mm; }
+
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+
+          body {
+            font-family: Helvetica, Arial, sans-serif;
+            font-size: 11px;
+            color: #1a1a2e;
+            background: #ffffff;
           }
 
-            * { margin: 0; padding: 0; box-sizing: border-box; }
-            body { font-family: Arial, sans-serif; background-color: #f5f5f5; padding: 20px; }
-            .container { max-width: 920px; margin: 0 auto; background-color: white; padding: 36px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-            .header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #2c3e50; padding-bottom: 16px; }
-            .header h1 { font-size: 24px; color: #2c3e50; margin-bottom: 5px; }
-            .header p { color: #7f8c8d; font-size: 14px; }
-            .employee-info { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 22px; padding: 16px; background-color: #ecf0f1; border-radius: 5px; }
-            .info-item label { display: block; font-weight: bold; color: #2c3e50; font-size: 12px; text-transform: uppercase; margin-bottom: 4px; }
-            .info-item .value { color: #34495e; font-size: 14px; }
-            .salary-section { margin-bottom: 24px; border-top: 2px solid #bdc3c7; padding-top: 16px; }
-            .salary-section h2 { font-size: 16px; color: #2c3e50; margin-bottom: 12px; font-weight: bold; }
-            .salary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-            .salary-item { padding: 12px; background-color: #f8f9fa; border-radius: 5px; border-left: 4px solid #3498db; }
-            .salary-item label { display: block; font-size: 12px; color: #7f8c8d; text-transform: uppercase; margin-bottom: 4px; font-weight: bold; }
-            .salary-item .value { font-size: 17px; color: #2c3e50; font-weight: bold; }
-            .rubrics-section { margin-top: 22px; border-top: 2px solid #bdc3c7; padding-top: 16px; break-inside: auto; page-break-inside: auto; }
-            .rubrics-section h2 { font-size: 16px; color: #2c3e50; margin-bottom: 12px; font-weight: bold; }
-            .rubrics-table { width: 100%; border-collapse: collapse; }
-            .rubrics-table thead { background-color: #34495e; color: white; }
-            .rubrics-table th { padding: 10px; text-align: left; font-size: 12px; font-weight: bold; text-transform: uppercase; }
-            .rubrics-table td { padding: 9px 10px; border-bottom: 1px solid #ecf0f1; font-size: 12px; }
-            .rubrics-table tr:nth-child(even) { background-color: #f8f9fa; }
-            .rubrics-table .value { text-align: right; font-family: monospace; }
-            .summary-box { margin-top: 20px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; break-inside: auto; page-break-inside: auto; }
-            .summary-item { border: 1px solid #d6dde3; border-radius: 5px; padding: 10px; background-color: #fbfcfd; }
-            .summary-item label { display: block; text-transform: uppercase; color: #6b7c8f; font-size: 11px; margin-bottom: 5px; font-weight: bold; }
-            .summary-item .value { font-size: 15px; color: #2c3e50; font-weight: bold; }
-            .footer-bases { margin-top: 24px; border-top: 2px solid #bdc3c7; padding-top: 14px; break-before: auto; page-break-before: auto; }
-            .footer-bases h3 { font-size: 14px; color: #2c3e50; margin-bottom: 10px; }
-            .bases-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-            .bases-table th { text-align: left; padding: 8px; background: #eef2f6; border-bottom: 1px solid #d6dde3; }
-            .bases-table td { padding: 8px; border-bottom: 1px solid #eef2f6; }
-            .bases-table .value { text-align: right; font-family: monospace; }
-            .footer { margin-top: 30px; text-align: center; color: #95a5a6; font-size: 11px; border-top: 1px solid #bdc3c7; padding-top: 14px; }
+          /* ── Cabeçalho da empresa ───────────────────────── */
+          .company-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            border-bottom: 2px solid #1a1a2e;
+            padding-bottom: 10px;
+            margin-bottom: 12px;
+          }
+          .company-name {
+            font-size: 16px;
+            font-weight: bold;
+            letter-spacing: 0.5px;
+            color: #1a1a2e;
+          }
+          .company-meta {
+            font-size: 10px;
+            color: #5a5a72;
+            margin-top: 3px;
+          }
+          .doc-title {
+            text-align: right;
+          }
+          .doc-title h1 {
+            font-size: 18px;
+            font-weight: bold;
+            color: #1a1a2e;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+          }
+          .doc-title .period {
+            font-size: 11px;
+            color: #5a5a72;
+            margin-top: 3px;
+          }
 
-            /* Regras para impressão/PDF com quebra otimizada em A4 */
-            .employee-info,
-            .salary-section {
-              break-inside: avoid-page;
-              page-break-inside: avoid;
-            }
+          /* ── Grid de dados do funcionário ───────────────── */
+          .employee-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 6px 12px;
+            background: #f4f6fb;
+            border: 1px solid #dde3ef;
+            border-radius: 4px;
+            padding: 10px 14px;
+            margin-bottom: 14px;
+          }
+          .eg-item label {
+            display: block;
+            font-size: 9px;
+            font-weight: bold;
+            text-transform: uppercase;
+            color: #8890a4;
+            margin-bottom: 2px;
+            letter-spacing: 0.4px;
+          }
+          .eg-item .val {
+            font-size: 11px;
+            color: #1a1a2e;
+            font-weight: 600;
+          }
 
-            .summary-item {
-              break-inside: avoid-page;
-              page-break-inside: avoid;
-            }
+          /* ── Tabela de rubricas ──────────────────────────── */
+          .rubrics-title {
+            font-size: 11px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #1a1a2e;
+            margin-bottom: 6px;
+            border-left: 3px solid #1a1a2e;
+            padding-left: 6px;
+          }
+          .rubrics-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 14px;
+          }
+          .rubrics-table thead tr {
+            background: #1a1a2e;
+            color: #ffffff;
+          }
+          .rubrics-table th {
+            padding: 7px 9px;
+            font-size: 10px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+          }
+          .rubrics-table th.right,
+          .rubrics-table td.right { text-align: right; }
+          .rubrics-table td {
+            padding: 6px 9px;
+            border-bottom: 1px solid #eaedf5;
+            font-size: 11px;
+            color: #1a1a2e;
+            vertical-align: top;
+          }
+          .rubrics-table tr:nth-child(even) td { background: #f8f9fd; }
+          .rubrics-table td.earnings { color: #1a6b3c; font-family: monospace; }
+          .rubrics-table td.deductions { color: #9b2226; font-family: monospace; }
+          .rubrics-table td.empty { color: #bbb; }
 
-            .rubrics-section h2,
-            .footer-bases h3 {
-              break-after: avoid-page;
-              page-break-after: avoid;
-            }
+          /* ── Bloco de totais ────────────────────────────── */
+          .summary-row {
+            display: flex;
+            justify-content: flex-end;
+            gap: 0;
+            border-top: 2px solid #1a1a2e;
+            margin-top: 4px;
+          }
+          .summary-cell {
+            min-width: 160px;
+            padding: 10px 14px;
+            text-align: right;
+            border-left: 1px solid #dde3ef;
+          }
+          .summary-cell label {
+            display: block;
+            font-size: 9px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            color: #8890a4;
+            margin-bottom: 3px;
+          }
+          .summary-cell .val {
+            font-size: 14px;
+            font-weight: bold;
+          }
+          .summary-cell.earnings .val { color: #1a6b3c; }
+          .summary-cell.deductions .val { color: #9b2226; }
+          .summary-cell.net .val { color: #1a1a2e; font-size: 16px; }
 
-            .rubrics-table,
-            .bases-table {
-              page-break-inside: auto;
-            }
+          /* ── Bases / informativos ───────────────────────── */
+          .footer-bases {
+            margin-top: 18px;
+            border-top: 1px solid #dde3ef;
+            padding-top: 10px;
+          }
+          .footer-bases h3 {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            color: #8890a4;
+            margin-bottom: 6px;
+          }
+          .bases-table { width: 100%; border-collapse: collapse; font-size: 10px; }
+          .bases-table th {
+            text-align: left;
+            padding: 5px 8px;
+            background: #f4f6fb;
+            border-bottom: 1px solid #dde3ef;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            color: #5a5a72;
+          }
+          .bases-table td {
+            padding: 5px 8px;
+            border-bottom: 1px solid #f0f2f8;
+            color: #1a1a2e;
+          }
+          .bases-table td.right { text-align: right; font-family: monospace; }
 
-            .rubrics-table thead,
-            .bases-table thead {
-              display: table-header-group;
-            }
+          /* ── Rodapé do documento ────────────────────────── */
+          .doc-footer {
+            margin-top: 24px;
+            border-top: 1px solid #dde3ef;
+            padding-top: 8px;
+            font-size: 9px;
+            color: #aab0c0;
+            text-align: center;
+          }
 
-            .rubrics-table tr,
-            .bases-table tr {
-              break-inside: avoid;
-              page-break-inside: avoid;
-            }
+          /* ── Regras de paginação ────────────────────────── */
+          .employee-grid { page-break-inside: avoid; break-inside: avoid; }
+          .summary-row   { page-break-inside: avoid; break-inside: avoid; }
+          .rubrics-table thead { display: table-header-group; }
+          .rubrics-table tr { page-break-inside: avoid; break-inside: avoid; }
+          .bases-table thead { display: table-header-group; }
+          .bases-table tr { page-break-inside: avoid; break-inside: avoid; }
 
-            .rubrics-table tfoot,
-            .bases-table tfoot {
-              display: table-footer-group;
-            }
-
-            @media print {
-              body {
-                background: #ffffff;
-                padding: 0;
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-              }
-
-              .container {
-                max-width: none;
-                margin: 0;
-                padding: 0;
-                box-shadow: none;
-              }
-            }
+          @media print {
+            body { background: #ffffff; }
+            .container { margin: 0; padding: 0; box-shadow: none; }
+          }
         </style>
     </head>
     <body>
-        <div class="container">
-            <div class="header">
-                <h1>PAYSLIP</h1>
-                <p>Period: #{competence}</p>
-            </div>
 
-            <div class="employee-info">
-                <div class="info-item">
-                    <label>Name</label>
-                    <div class="value">#{html_escape(user.name)}</div>
-                </div>
-                <div class="info-item">
-                    <label>CPF</label>
-                    <div class="value">#{format_cpf(user.cpf)}</div>
-                </div>
-                <div class="info-item">
-                    <label>Registration</label>
-                    <div class="value">#{html_escape(employee.registration)}</div>
-                </div>
-                <div class="info-item">
-                    <label>Job Title</label>
-                    <div class="value">#{html_escape(employee.job_title)}</div>
-                </div>
-            </div>
-
-            <div class="salary-section">
-                  <h2>Salary Summary</h2>
-                <div class="salary-grid">
-                    <div class="salary-item">
-                      <label>Base Salary</label>
-                        <div class="value">#{format_money(payslip.base_salary)}</div>
-                    </div>
-                    <div class="salary-item">
-                      <label>Stored Net Salary</label>
-                        <div class="value">#{format_money(payslip.net_salary)}</div>
-                    </div>
-                </div>
-            </div>
-
-                #{render_financial_section("Earnings", earnings)}
-                #{render_financial_section("Deductions", deductions)}
-
-            <div class="summary-box">
-                <div class="summary-item">
-                    <label>Total Earnings</label>
-                    <div class="value">#{format_money(total_earnings)}</div>
-                </div>
-                <div class="summary-item">
-                    <label>Total Deductions</label>
-                    <div class="value">#{format_money(total_deductions)}</div>
-                </div>
-                <div class="summary-item">
-                    <label>Net Amount</label>
-                    <div class="value">#{format_money(net_amount)}</div>
-                </div>
-            </div>
-
-                #{render_footer_bases(footer_items)}
-
-            <div class="footer">
-                <p>This is a confidential document generated automatically by the Payroll API system.</p>
-                  <p>Issued on: #{format_current_date()}</p>
-            </div>
+      <!-- Cabeçalho da empresa -->
+      <div class="company-header">
+        <div>
+          <div class="company-name">#{html_escape(company_name(company))}</div>
+          <div class="company-meta">#{cnpj_label(company)}</div>
         </div>
+        <div class="doc-title">
+          <h1>Holerite</h1>
+          <div class="period">Competência: #{competence}</div>
+        </div>
+      </div>
+
+      <!-- Dados do funcionário -->
+      <div class="employee-grid">
+        <div class="eg-item">
+          <label>Funcionário</label>
+          <div class="val">#{html_escape(user.name)}</div>
+        </div>
+        <div class="eg-item">
+          <label>Matrícula</label>
+          <div class="val">#{html_escape(employee.registration)}</div>
+        </div>
+        <div class="eg-item">
+          <label>CPF</label>
+          <div class="val">#{format_cpf(user.cpf)}</div>
+        </div>
+        <div class="eg-item">
+          <label>Data de Admissão</label>
+          <div class="val">#{format_date_br(employee.admission_date)}</div>
+        </div>
+        <div class="eg-item">
+          <label>Cargo</label>
+          <div class="val">#{html_escape(employee.job_title)}</div>
+        </div>
+        <div class="eg-item">
+          <label>Setor</label>
+          <div class="val">#{html_escape(department_name_label(department))}</div>
+        </div>
+        <div class="eg-item">
+          <label>Salário Base</label>
+          <div class="val">#{format_money(payslip.base_salary)}</div>
+        </div>
+        <div class="eg-item">
+          <label>Mês de Referência</label>
+          <div class="val">#{competence}</div>
+        </div>
+      </div>
+
+      <!-- Tabela unificada de rubricas -->
+      <div class="rubrics-title">Lançamentos</div>
+      <table class="rubrics-table">
+        <thead>
+          <tr>
+            <th style="width:7%">Cód.</th>
+            <th>Descrição</th>
+            <th style="width:10%">Referência</th>
+            <th class="right" style="width:14%">Proventos</th>
+            <th class="right" style="width:14%">Descontos</th>
+          </tr>
+        </thead>
+        <tbody>
+          #{render_unified_rows(earnings, deductions)}
+        </tbody>
+      </table>
+
+      <!-- Totais -->
+      <div class="summary-row">
+        <div class="summary-cell earnings">
+          <label>Total Proventos</label>
+          <div class="val">#{format_money(total_earnings)}</div>
+        </div>
+        <div class="summary-cell deductions">
+          <label>Total Descontos</label>
+          <div class="val">#{format_money(total_deductions)}</div>
+        </div>
+        <div class="summary-cell net">
+          <label>Valor Líquido</label>
+          <div class="val">#{format_money(net_amount)}</div>
+        </div>
+      </div>
+
+      #{render_footer_bases(footer_items)}
+
+      <div class="doc-footer">
+        <p>Documento confidencial gerado automaticamente pelo sistema Payroll API.</p>
+        <p>Emitido em: #{format_current_date()}</p>
+      </div>
+
     </body>
     </html>
     """
   end
 
-  defp render_financial_section(_title, []), do: ""
+  # Gera as linhas da tabela unificada mesclando proventos e descontos.
+  # Cada rubrica ocupa uma linha; a coluna correta (earnings/deductions) é preenchida.
+  defp render_unified_rows(earnings, deductions) do
+    earnings_rows =
+      Enum.map(earnings, fn item ->
+        """
+        <tr>
+          <td>#{html_escape(item.rubric.code)}</td>
+          <td>#{html_escape(item.rubric.description)}</td>
+          <td>#{html_escape(item.reference || "-")}</td>
+          <td class="right earnings">#{format_money(item.amount)}</td>
+          <td class="right empty">—</td>
+        </tr>
+        """
+      end)
 
-  defp render_financial_section(title, items) do
-    rows =
-      items
-      |> Enum.map(&render_item_row/1)
-      |> Enum.join()
+    deductions_rows =
+      Enum.map(deductions, fn item ->
+        """
+        <tr>
+          <td>#{html_escape(item.rubric.code)}</td>
+          <td>#{html_escape(item.rubric.description)}</td>
+          <td>#{html_escape(item.reference || "-")}</td>
+          <td class="right empty">—</td>
+          <td class="right deductions">#{format_money(item.amount)}</td>
+        </tr>
+        """
+      end)
 
-    """
-    <div class="rubrics-section">
-        <h2>#{title}</h2>
-      <table class="rubrics-table">
-            <thead>
-                <tr>
-            <th>Code</th>
-            <th>Description</th>
-            <th>Reference</th>
-            <th style="text-align: right;">Amount</th>
-                </tr>
-            </thead>
-            <tbody>
-                #{rows}
-            </tbody>
-        </table>
-    </div>
-    """
-  end
-
-  defp render_item_row(item) do
-    rubric = item.rubric
-    reference = item.reference || "-"
-
-    """
-    <tr>
-        <td>#{html_escape(rubric.code)}</td>
-        <td>#{html_escape(rubric.description)}</td>
-        <td>#{html_escape(reference)}</td>
-        <td class="value">#{format_money(item.amount)}</td>
-    </tr>
-    """
+    (earnings_rows ++ deductions_rows) |> Enum.join()
   end
 
   defp render_footer_bases([]), do: ""
@@ -311,11 +435,11 @@ defmodule PayrollApi.Payroll.PdfGenerator do
       |> Enum.map(fn item ->
         """
         <tr>
-            <td>#{html_escape(item.rubric.code)}</td>
-            <td>#{html_escape(item.rubric.description)}</td>
-            <td>#{html_escape(item.rubric.category)}</td>
-            <td>#{html_escape(item.reference || "-")}</td>
-            <td class="value">#{format_money(item.amount)}</td>
+          <td>#{html_escape(item.rubric.code)}</td>
+          <td>#{html_escape(item.rubric.description)}</td>
+          <td>#{html_escape(item.rubric.category)}</td>
+          <td>#{html_escape(item.reference || "-")}</td>
+          <td class="right">#{format_money(item.amount)}</td>
         </tr>
         """
       end)
@@ -323,20 +447,18 @@ defmodule PayrollApi.Payroll.PdfGenerator do
 
     """
     <div class="footer-bases">
-      <h3>Base, Charge, and Informational Items</h3>
+      <h3>Bases, Encargos e Itens Informativos</h3>
       <table class="bases-table">
         <thead>
           <tr>
-            <th>Code</th>
-            <th>Description</th>
-            <th>Category</th>
-            <th>Reference</th>
-            <th style="text-align: right;">Amount</th>
+            <th>Cód.</th>
+            <th>Descrição</th>
+            <th>Categoria</th>
+            <th>Referência</th>
+            <th class="right">Valor</th>
           </tr>
         </thead>
-        <tbody>
-          #{rows}
-        </tbody>
+        <tbody>#{rows}</tbody>
       </table>
     </div>
     """
@@ -368,7 +490,48 @@ defmodule PayrollApi.Payroll.PdfGenerator do
     end)
   end
 
-  defp format_competence(%Date{} = competence), do: Calendar.strftime(competence, "%B %Y")
+  defp company_name(nil), do: "—"
+  defp company_name(%{name: name}), do: name
+
+  defp cnpj_label(nil), do: ""
+  defp cnpj_label(%{cnpj: nil}), do: ""
+  defp cnpj_label(%{cnpj: ""}), do: ""
+  defp cnpj_label(%{cnpj: cnpj}), do: "CNPJ: #{format_cnpj(cnpj)}"
+
+  defp format_cnpj(cnpj) when is_binary(cnpj) and byte_size(cnpj) == 14 do
+    <<a::binary-size(2), b::binary-size(3), c::binary-size(3), d::binary-size(4),
+      e::binary-size(2)>> = cnpj
+
+    "#{a}.#{b}.#{c}/#{d}-#{e}"
+  end
+
+  defp format_cnpj(cnpj), do: cnpj
+
+  defp department_name_label(nil), do: "—"
+  defp department_name_label(%{name: name}), do: name
+
+  defp format_date_br(nil), do: "—"
+  defp format_date_br(%Date{} = date), do: Calendar.strftime(date, "%d/%m/%Y")
+  defp format_date_br(_), do: "—"
+
+  @months_pt %{
+    1 => "Janeiro",
+    2 => "Fevereiro",
+    3 => "Março",
+    4 => "Abril",
+    5 => "Maio",
+    6 => "Junho",
+    7 => "Julho",
+    8 => "Agosto",
+    9 => "Setembro",
+    10 => "Outubro",
+    11 => "Novembro",
+    12 => "Dezembro"
+  }
+
+  defp format_competence(%Date{month: month, year: year}) do
+    "#{Map.fetch!(@months_pt, month)}/#{year}"
+  end
 
   defp format_competence(_), do: "N/A"
 
@@ -425,7 +588,8 @@ defmodule PayrollApi.Payroll.PdfGenerator do
   end
 
   defp format_current_date do
-    Date.utc_today()
-    |> Calendar.strftime("%d %B %Y")
+    %Date{day: day, month: month, year: year} = Date.utc_today()
+    month_name = Map.fetch!(@months_pt, month)
+    "#{String.pad_leading(to_string(day), 2, "0")} de #{month_name} de #{year}"
   end
 end
