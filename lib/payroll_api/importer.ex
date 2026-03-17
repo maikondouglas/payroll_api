@@ -27,7 +27,12 @@ defmodule PayrollApi.Payroll.Importer do
     |> Multi.run(:employee_cache, fn repo, _ -> {:ok, load_employee_cache(repo)} end)
     |> Multi.run(:rubric_cache, fn repo, _ -> {:ok, load_rubric_cache(repo)} end)
     |> Multi.run(:csv_data, fn _repo, _ -> read_csv(file_path) end)
-    |> Multi.run(:import, fn repo, %{employee_cache: employee_cache, rubric_cache: rubric_cache, csv_data: csv_data} ->
+    |> Multi.run(:import, fn repo,
+                             %{
+                               employee_cache: employee_cache,
+                               rubric_cache: rubric_cache,
+                               csv_data: csv_data
+                             } ->
       do_import(repo, csv_data, employee_cache, rubric_cache, competence_date)
     end)
     |> Repo.transaction(timeout: :infinity, pool_timeout: 60_000)
@@ -41,11 +46,22 @@ defmodule PayrollApi.Payroll.Importer do
       {:error, "Arquivo CSV nao encontrado ou inacessivel"}
 
     e in DBConnection.ConnectionError ->
-      {:error, %{message: "Falha de conexao com banco durante importacao", type: "ConnectionError", exception: Exception.message(e)}}
+      {:error,
+       %{
+         message: "Falha de conexao com banco durante importacao",
+         type: "ConnectionError",
+         exception: Exception.message(e)
+       }}
 
     e ->
       Logger.error("Erro inesperado no importador financeiro: #{inspect(e)}")
-      {:error, %{message: "Erro inesperado ao processar arquivo CSV", type: e.__struct__ |> Module.split() |> List.last(), exception: Exception.message(e)}}
+
+      {:error,
+       %{
+         message: "Erro inesperado ao processar arquivo CSV",
+         type: e.__struct__ |> Module.split() |> List.last(),
+         exception: Exception.message(e)
+       }}
   end
 
   defp do_import(repo, {headers, rows}, employee_cache, rubric_cache, competence_date) do
@@ -101,25 +117,74 @@ defmodule PayrollApi.Payroll.Importer do
   defp build_rubric_columns(headers, rubric_cache) do
     headers
     |> Enum.with_index()
-    |> Enum.reduce_while({:ok, []}, fn {header, index}, {:ok, acc} ->
+    |> Enum.reduce_while({:ok, %{}}, fn {header, index}, {:ok, acc} ->
       if index == 0 do
         {:cont, {:ok, acc}}
       else
-        case extract_rubric_code(header) do
-          nil ->
-            {:halt, {:error, "Cabecalho de rubrica invalido na coluna #{index + 1}: #{header}"}}
-
-          code ->
+        case parse_rubric_header(header) do
+          {:amount, code} ->
             case Map.get(rubric_cache, code) do
-              nil -> {:halt, {:error, "Rubrica com codigo #{code} nao cadastrada"}}
-              rubric_id -> {:cont, {:ok, [%{index: index, code: code, rubric_id: rubric_id} | acc]}}
+              nil ->
+                {:halt, {:error, "Rubrica com codigo #{code} nao cadastrada"}}
+
+              rubric_id ->
+                current =
+                  Map.get(acc, code, %{
+                    code: code,
+                    rubric_id: rubric_id,
+                    amount_index: nil,
+                    reference_index: nil
+                  })
+
+                updated = %{current | rubric_id: rubric_id, amount_index: index}
+                {:cont, {:ok, Map.put(acc, code, updated)}}
             end
+
+          {:reference, code} ->
+            current =
+              Map.get(acc, code, %{
+                code: code,
+                rubric_id: nil,
+                amount_index: nil,
+                reference_index: nil
+              })
+
+            updated = %{current | reference_index: index}
+            {:cont, {:ok, Map.put(acc, code, updated)}}
+
+          :ignore ->
+            {:cont, {:ok, acc}}
+
+          :invalid ->
+            {:halt, {:error, "Cabecalho de rubrica invalido na coluna #{index + 1}: #{header}"}}
         end
       end
     end)
     |> case do
-      {:ok, columns} -> {:ok, Enum.reverse(columns)}
-      error -> error
+      {:ok, grouped_columns} ->
+        grouped_columns
+        |> Map.values()
+        |> Enum.reduce_while({:ok, []}, fn column, {:ok, acc} ->
+          cond do
+            is_nil(column.amount_index) and not is_nil(column.reference_index) ->
+              {:halt,
+               {:error,
+                "Coluna de reference sem rubrica correspondente para o codigo #{column.code}"}}
+
+            is_nil(column.amount_index) ->
+              {:cont, {:ok, acc}}
+
+            true ->
+              {:cont, {:ok, [column | acc]}}
+          end
+        end)
+        |> case do
+          {:ok, columns} -> {:ok, Enum.sort_by(columns, & &1.amount_index)}
+          error -> error
+        end
+
+      error ->
+        error
     end
   end
 
@@ -128,11 +193,20 @@ defmodule PayrollApi.Payroll.Importer do
 
     rows
     |> Enum.with_index(2)
-    |> Enum.reduce_while({:ok, %{success: 0, errors: 0, details: []}}, fn {row, line_number}, {:ok, acc} ->
+    |> Enum.reduce_while({:ok, %{success: 0, errors: 0, details: []}}, fn {row, line_number},
+                                                                          {:ok, acc} ->
       if blank_row?(row) do
         {:cont, {:ok, acc}}
       else
-        case import_row(repo, row, line_number, competence_date, employee_cache, rubric_columns, now) do
+        case import_row(
+               repo,
+               row,
+               line_number,
+               competence_date,
+               employee_cache,
+               rubric_columns,
+               now
+             ) do
           {:ok, row_result} ->
             next = %{acc | success: acc.success + 1, details: [{:ok, row_result} | acc.details]}
             {:cont, {:ok, next}}
@@ -164,7 +238,11 @@ defmodule PayrollApi.Payroll.Importer do
        }}
     else
       {:error, %Ecto.Changeset{} = changeset} ->
-        {:error, %{message: "Falha ao salvar dados na linha #{line_number}", details: format_changeset_errors(changeset)}}
+        {:error,
+         %{
+           message: "Falha ao salvar dados na linha #{line_number}",
+           details: format_changeset_errors(changeset)
+         }}
 
       {:error, reason} ->
         {:error, reason}
@@ -180,15 +258,25 @@ defmodule PayrollApi.Payroll.Importer do
 
   defp find_employee_id(employee_cache, registration) do
     case Map.get(employee_cache, registration) do
-      nil -> {:error, "Matricula #{registration} nao encontrada. Cadastre o funcionario primeiro."}
-      employee_id -> {:ok, employee_id}
+      nil ->
+        {:error, "Matricula #{registration} nao encontrada. Cadastre o funcionario primeiro."}
+
+      employee_id ->
+        {:ok, employee_id}
     end
   end
 
   defp build_financial_payload(row, rubric_columns) do
     rubric_columns
-    |> Enum.reduce_while({:ok, Decimal.new("0"), [], %{}}, fn %{index: index, code: code, rubric_id: rubric_id}, {:ok, base_salary, entries, details} ->
-      raw_value = Enum.at(row, index, "")
+    |> Enum.reduce_while({:ok, Decimal.new("0"), [], %{}}, fn %{
+                                                                amount_index: amount_index,
+                                                                reference_index: reference_index,
+                                                                code: code,
+                                                                rubric_id: rubric_id
+                                                              },
+                                                              {:ok, base_salary, entries, details} ->
+      raw_value = Enum.at(row, amount_index, "")
+      reference = parse_reference(row, reference_index)
 
       case parse_decimal(raw_value) do
         {:ok, amount} ->
@@ -199,7 +287,7 @@ defmodule PayrollApi.Payroll.Importer do
               {:cont, {:ok, amount, entries, next_details}}
 
             Decimal.compare(amount, Decimal.new("0")) == :gt ->
-              entry = %{rubric_id: rubric_id, amount: amount, reference: nil}
+              entry = %{rubric_id: rubric_id, amount: amount, reference: reference}
               {:cont, {:ok, base_salary, [entry | entries], next_details}}
 
             true ->
@@ -289,12 +377,76 @@ defmodule PayrollApi.Payroll.Importer do
     end
   end
 
+  defp parse_reference(_row, nil), do: nil
+
+  defp parse_reference(row, reference_index) do
+    row
+    |> Enum.at(reference_index, "")
+    |> to_string()
+    |> String.trim()
+    |> case do
+      "" -> nil
+      reference -> reference
+    end
+  end
+
+  defp parse_rubric_header(header) do
+    normalized = normalize_header(header)
+
+    cond do
+      normalized == "" ->
+        :ignore
+
+      String.ends_with?(normalized, "_reference") ->
+        code = String.replace_suffix(normalized, "_reference", "")
+
+        case extract_rubric_code(code) do
+          nil -> :invalid
+          parsed_code -> {:reference, parsed_code}
+        end
+
+      true ->
+        case extract_rubric_code(header) do
+          nil ->
+            :invalid
+
+          code ->
+            if reference_header?(normalized) do
+              {:reference, code}
+            else
+              {:amount, code}
+            end
+        end
+    end
+  end
+
+  defp reference_header?(normalized_header) do
+    String.contains?(normalized_header, "reference") ||
+      String.contains?(normalized_header, "referencia") ||
+      String.contains?(normalized_header, "_ref") ||
+      String.contains?(normalized_header, "quantidade") ||
+      String.contains?(normalized_header, "_qtd")
+  end
+
+  defp normalize_header(header) do
+    header
+    |> to_string()
+    |> String.trim()
+    |> String.downcase()
+    |> String.normalize(:nfd)
+    |> String.replace(~r/[\p{Mn}]/u, "")
+    |> String.replace(~r/[^\p{L}\p{N}]+/u, "_")
+    |> String.trim("_")
+  end
+
   defp extract_rubric_code(header) do
     header
     |> to_string()
     |> String.trim()
     |> case do
-      "" -> nil
+      "" ->
+        nil
+
       raw ->
         case Regex.run(~r/(\d{1,3})/, raw) do
           [_, code] -> normalize_code(code)

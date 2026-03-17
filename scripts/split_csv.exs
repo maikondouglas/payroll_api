@@ -34,7 +34,7 @@ defmodule SplitCSV do
       write_csv(employees_path, [@employees_header | employees_rows])
 
       write_csv(payroll_path, [
-        ["matricula" | Enum.map(financial_columns, &elem(&1, 0))] | payroll_rows
+        ["matricula" | payroll_header(financial_columns)] | payroll_rows
       ])
 
       IO.puts("OK: employees.csv gerado em #{employees_path} (#{length(employees_rows)} linhas)")
@@ -120,20 +120,46 @@ defmodule SplitCSV do
   end
 
   defp find_financial_columns(headers) do
+    normalized_headers = Enum.map(headers, &normalize/1)
+
     cols =
       headers
       |> Enum.with_index()
       |> Enum.reduce([], fn {header, index}, acc ->
-        case extract_rubric_code(header) do
-          nil -> acc
-          code -> [{code, index} | acc]
+        cond do
+          reference_header?(header) ->
+            acc
+
+          true ->
+            case extract_rubric_code(header) do
+              nil ->
+                acc
+
+              code ->
+                reference_index =
+                  find_associated_reference_index(headers, normalized_headers, code, index)
+
+                [%{code: code, amount_index: index, reference_index: reference_index} | acc]
+            end
         end
       end)
       |> Enum.reverse()
-      |> Enum.reduce([], fn {code, index}, acc ->
-        case List.keyfind(acc, code, 0) do
-          nil -> [{code, [index]} | acc]
-          {^code, indexes} -> List.keyreplace(acc, code, 0, {code, indexes ++ [index]})
+      |> Enum.reduce([], fn entry, acc ->
+        case List.keyfind(acc, entry.code, 0) do
+          nil ->
+            [
+              {entry.code,
+               %{amount_indexes: [entry.amount_index], reference_indexes: [entry.reference_index]}}
+              | acc
+            ]
+
+          {code, grouped} ->
+            merged = %{
+              amount_indexes: grouped.amount_indexes ++ [entry.amount_index],
+              reference_indexes: grouped.reference_indexes ++ [entry.reference_index]
+            }
+
+            List.keyreplace(acc, code, 0, {code, merged})
         end
       end)
       |> Enum.reverse()
@@ -164,12 +190,36 @@ defmodule SplitCSV do
     Enum.map(rows, fn row ->
       [
         at(row, matricula_index)
-        | Enum.map(financial_columns, fn {_code, indexes} ->
-            indexes
-            |> Enum.map(&at(row, &1))
-            |> sum_money_values()
+        | Enum.flat_map(financial_columns, fn {_code, grouped} ->
+            amount =
+              grouped.amount_indexes
+              |> Enum.map(&at(row, &1))
+              |> sum_money_values()
+
+            reference =
+              grouped.reference_indexes
+              |> Enum.map(&at(row, &1))
+              |> extract_reference_value()
+
+            [amount, reference]
           end)
       ]
+    end)
+  end
+
+  defp payroll_header(financial_columns) do
+    Enum.flat_map(financial_columns, fn {code, _grouped} ->
+      [code, "#{code}_reference"]
+    end)
+  end
+
+  defp extract_reference_value(values) do
+    values
+    |> Enum.find_value("", fn value ->
+      case value |> to_string() |> String.trim() do
+        "" -> nil
+        reference -> reference
+      end
     end)
   end
 
@@ -180,6 +230,65 @@ defmodule SplitCSV do
       end)
 
     format_money(total)
+  end
+
+  defp find_associated_reference_index(headers, normalized_headers, code, rubric_index) do
+    same_code_index =
+      headers
+      |> Enum.with_index()
+      |> Enum.find_value(fn {header, index} ->
+        normalized = Enum.at(normalized_headers, index, "")
+
+        cond do
+          index == rubric_index ->
+            nil
+
+          not reference_header?(header) ->
+            nil
+
+          contains_code?(normalized, code) ->
+            index
+
+          true ->
+            nil
+        end
+      end)
+
+    same_code_index ||
+      case Enum.at(headers, rubric_index + 1) do
+        nil ->
+          nil
+
+        next_header ->
+          if reference_header?(next_header), do: rubric_index + 1, else: nil
+      end
+  end
+
+  defp contains_code?(normalized_header, code) do
+    numeric_code = code |> String.to_integer() |> Integer.to_string()
+    Regex.match?(~r/(^|\D)0*#{numeric_code}(\D|$)/u, normalized_header)
+  end
+
+  defp reference_header?(header) do
+    normalized = normalize(header)
+
+    String.contains?(normalized, "referencia") ||
+      String.contains?(normalized, "reference") ||
+      Enum.any?(
+        String.split(normalized),
+        &(&1 in [
+            "ref",
+            "qtd",
+            "quantidade",
+            "hora",
+            "horas",
+            "dia",
+            "dias",
+            "percentual",
+            "percent",
+            "perc"
+          ])
+      )
   end
 
   defp parse_money(nil), do: 0.0

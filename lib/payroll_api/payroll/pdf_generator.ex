@@ -29,19 +29,21 @@ defmodule PayrollApi.Payroll.PdfGenerator do
       )
 
     {earnings, deductions, footer_items} = split_items_by_category(payslip.payslip_items)
+    earnings_without_base = reject_base_salary_items(earnings)
 
-    total_earnings = sum_items(earnings)
+    earnings_items_total = sum_items(earnings_without_base)
+    total_earnings = Decimal.add(payslip.base_salary || Decimal.new("0"), earnings_items_total)
     total_deductions = sum_items(deductions)
 
     net_amount =
       payslip.base_salary
-      |> Decimal.add(total_earnings)
+      |> Decimal.add(earnings_items_total)
       |> Decimal.sub(total_deductions)
 
     html_string =
       render_html(
         payslip,
-        earnings,
+        earnings_without_base,
         deductions,
         footer_items,
         total_earnings,
@@ -92,6 +94,9 @@ defmodule PayrollApi.Payroll.PdfGenerator do
     department = employee.department
     company = if department, do: department.company, else: nil
     competence = format_competence(payslip.competence)
+    logo_url = company_logo_url()
+    authenticity_date = format_current_date_br()
+    authenticity_hash = generate_document_hash(payslip)
 
     """
     <!DOCTYPE html>
@@ -109,6 +114,7 @@ defmodule PayrollApi.Payroll.PdfGenerator do
             font-size: 11px;
             color: #1a1a2e;
             background: #ffffff;
+            padding-bottom: 22mm;
           }
 
           /* ── Cabeçalho da empresa ───────────────────────── */
@@ -120,11 +126,31 @@ defmodule PayrollApi.Payroll.PdfGenerator do
             padding-bottom: 10px;
             margin-bottom: 12px;
           }
+          .company-brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+          }
+          .company-logo {
+            width: auto;
+            max-height: 70px;
+            object-fit: contain;
+            display: block;
+          }
+          .company-info {
+            display: flex;
+            flex-direction: column;
+          }
           .company-name {
             font-size: 16px;
             font-weight: bold;
             letter-spacing: 0.5px;
             color: #1a1a2e;
+          }
+          .company-legal {
+            font-size: 10px;
+            color: #5a5a72;
+            margin-top: 2px;
           }
           .company-meta {
             font-size: 10px;
@@ -200,6 +226,8 @@ defmodule PayrollApi.Payroll.PdfGenerator do
             text-transform: uppercase;
             letter-spacing: 0.4px;
           }
+          .rubrics-table th.center,
+          .rubrics-table td.center { text-align: center; }
           .rubrics-table th.right,
           .rubrics-table td.right { text-align: right; }
           .rubrics-table td {
@@ -278,12 +306,15 @@ defmodule PayrollApi.Payroll.PdfGenerator do
 
           /* ── Rodapé do documento ────────────────────────── */
           .doc-footer {
-            margin-top: 24px;
-            border-top: 1px solid #dde3ef;
-            padding-top: 8px;
-            font-size: 9px;
-            color: #aab0c0;
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 5mm;
+            padding: 0 14mm;
+            font-size: 8pt;
+            color: #9aa2b6;
             text-align: center;
+            letter-spacing: 0.1px;
           }
 
           /* ── Regras de paginação ────────────────────────── */
@@ -304,9 +335,12 @@ defmodule PayrollApi.Payroll.PdfGenerator do
 
       <!-- Cabeçalho da empresa -->
       <div class="company-header">
-        <div>
-          <div class="company-name">#{html_escape(company_name(company))}</div>
-          <div class="company-meta">#{cnpj_label(company)}</div>
+        <div class="company-brand">
+          <img class="company-logo" src="#{logo_url}" alt="Logo Instituto Riviera" />
+          <div class="company-info">
+            <div class="company-name">#{html_escape(company_name(company))}</div>
+            <div class="company-meta">#{cnpj_label(company)}</div>
+          </div>
         </div>
         <div class="doc-title">
           <h1>Holerite</h1>
@@ -357,13 +391,13 @@ defmodule PayrollApi.Payroll.PdfGenerator do
           <tr>
             <th style="width:7%">Cód.</th>
             <th>Descrição</th>
-            <th style="width:10%">Referência</th>
+            <th class="center" style="width:10%">REFERÊNCIA</th>
             <th class="right" style="width:14%">Proventos</th>
             <th class="right" style="width:14%">Descontos</th>
           </tr>
         </thead>
         <tbody>
-          #{render_unified_rows(earnings, deductions)}
+          #{render_unified_rows(payslip.base_salary, earnings, deductions)}
         </tbody>
       </table>
 
@@ -386,8 +420,7 @@ defmodule PayrollApi.Payroll.PdfGenerator do
       #{render_footer_bases(footer_items)}
 
       <div class="doc-footer">
-        <p>Documento confidencial gerado automaticamente pelo sistema Payroll API.</p>
-        <p>Emitido em: #{format_current_date()}</p>
+        <p>Documento emitido através do sistema Payroll do Instituto Riviera no dia #{authenticity_date} - hash #{authenticity_hash}</p>
       </div>
 
     </body>
@@ -396,15 +429,26 @@ defmodule PayrollApi.Payroll.PdfGenerator do
   end
 
   # Gera as linhas da tabela unificada mesclando proventos e descontos.
-  # Cada rubrica ocupa uma linha; a coluna correta (earnings/deductions) é preenchida.
-  defp render_unified_rows(earnings, deductions) do
+  # A primeira linha e sempre o salario base (codigo 001).
+  defp render_unified_rows(base_salary, earnings, deductions) do
+    base_salary_row =
+      """
+      <tr>
+        <td>001</td>
+        <td>SALÁRIO BASE</td>
+        <td class="center">-</td>
+        <td class="right earnings">#{format_money(base_salary || Decimal.new("0"))}</td>
+        <td class="right empty">—</td>
+      </tr>
+      """
+
     earnings_rows =
       Enum.map(earnings, fn item ->
         """
         <tr>
           <td>#{html_escape(item.rubric.code)}</td>
           <td>#{html_escape(item.rubric.description)}</td>
-          <td>#{html_escape(item.reference || "-")}</td>
+          <td class="center">#{html_escape(format_reference(item.reference))}</td>
           <td class="right earnings">#{format_money(item.amount)}</td>
           <td class="right empty">—</td>
         </tr>
@@ -417,14 +461,27 @@ defmodule PayrollApi.Payroll.PdfGenerator do
         <tr>
           <td>#{html_escape(item.rubric.code)}</td>
           <td>#{html_escape(item.rubric.description)}</td>
-          <td>#{html_escape(item.reference || "-")}</td>
+          <td class="center">#{html_escape(format_reference(item.reference))}</td>
           <td class="right empty">—</td>
           <td class="right deductions">#{format_money(item.amount)}</td>
         </tr>
         """
       end)
 
-    (earnings_rows ++ deductions_rows) |> Enum.join()
+    ([base_salary_row] ++ earnings_rows ++ deductions_rows) |> Enum.join()
+  end
+
+  defp reject_base_salary_items(items) do
+    Enum.reject(items, fn item ->
+      normalize_rubric_code(item.rubric.code) == "001"
+    end)
+  end
+
+  defp normalize_rubric_code(code) do
+    code
+    |> to_string()
+    |> String.trim()
+    |> String.pad_leading(3, "0")
   end
 
   defp render_footer_bases([]), do: ""
@@ -514,6 +571,15 @@ defmodule PayrollApi.Payroll.PdfGenerator do
   defp format_date_br(%Date{} = date), do: Calendar.strftime(date, "%d/%m/%Y")
   defp format_date_br(_), do: "—"
 
+  defp format_reference(nil), do: "-"
+
+  defp format_reference(value) do
+    case value |> to_string() |> String.trim() do
+      "" -> "-"
+      reference -> reference
+    end
+  end
+
   @months_pt %{
     1 => "Janeiro",
     2 => "Fevereiro",
@@ -587,9 +653,29 @@ defmodule PayrollApi.Payroll.PdfGenerator do
     |> Phoenix.HTML.safe_to_string()
   end
 
-  defp format_current_date do
-    %Date{day: day, month: month, year: year} = Date.utc_today()
-    month_name = Map.fetch!(@months_pt, month)
-    "#{String.pad_leading(to_string(day), 2, "0")} de #{month_name} de #{year}"
+  defp format_current_date_br do
+    Date.utc_today()
+    |> Calendar.strftime("%d/%m/%Y")
+  end
+
+  defp company_logo_url do
+    base_url = PayrollApiWeb.Endpoint.static_url() |> String.trim_trailing("/")
+    "#{base_url}/images/logos_extract/logo_riviera_header.png"
+  end
+
+  defp generate_document_hash(%Payslip{} = payslip) do
+    payload =
+      [
+        "payslip",
+        to_string(payslip.id || "0"),
+        to_string(payslip.employee_id || "0"),
+        to_string(payslip.competence || "0"),
+        "instituto-riviera"
+      ]
+      |> Enum.join(":")
+
+    :crypto.hash(:sha256, payload)
+    |> Base.encode16(case: :lower)
+    |> binary_part(0, 20)
   end
 end
